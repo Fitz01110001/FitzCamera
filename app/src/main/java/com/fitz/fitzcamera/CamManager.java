@@ -4,7 +4,10 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.graphics.ImageFormat;
+import android.graphics.Point;
+import android.graphics.Rect;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
@@ -21,18 +24,22 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
 import android.util.Size;
+import android.util.SparseIntArray;
 import android.view.Surface;
-import android.view.TextureView;
 
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.fragment.app.Fragment;
 
+import com.fitz.fitzcamera.fragments.CommonCap;
 import com.fitz.fitzcamera.ui.AutoFitTextureView;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.List;
 
 /**
  * Manager capture
@@ -40,6 +47,19 @@ import java.util.Comparator;
 public class CamManager {
 
     private String TAG = "CamManager";
+
+    /**
+     * Conversion from screen rotation to JPEG orientation.
+     */
+    private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
+
+    static {
+        ORIENTATIONS.append(Surface.ROTATION_0, 90);
+        ORIENTATIONS.append(Surface.ROTATION_90, 0);
+        ORIENTATIONS.append(Surface.ROTATION_180, 270);
+        ORIENTATIONS.append(Surface.ROTATION_270, 180);
+    }
+
     /**
      * An additional thread for running tasks that shouldn't block the UI.
      */
@@ -82,19 +102,47 @@ public class CamManager {
 
     private Activity mContext;
 
+    private CommonCap mFragment;
+
+    private Rect mSensorRect;
+
+    private float mMaxZoom;
+
     private CameraDevice mCameraDevice;
+
+    private Surface surface;
 
     private CameraCaptureSession mCameraCaptureSession;
 
     /**
+     * Max preview width that is guaranteed by Camera2 API
+     */
+    private static final int MAX_PREVIEW_WIDTH = 1920;
+
+    /**
+     * Max preview height that is guaranteed by Camera2 API
+     */
+    private static final int MAX_PREVIEW_HEIGHT = 1080;
+
+    /**
+     * The {@link android.util.Size} of camera preview.
+     */
+    private Size mPreviewSize;
+
+    /**
+     * Orientation of the camera sensor
+     */
+    private int mSensorOrientation;
+
+    /**
      * 默认4:3比例
      */
-    private static Size mDefaultSize43 = new Size(3648, 2736);
-
+    private static Size mDefaultSize;
 
     private AutoFitTextureView mTextureView;
 
-    public CamManager(Activity context) {
+    public CamManager(CommonCap fg, Activity context) {
+        mFragment = fg;
         mContext = context;
         mCameraManager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
         startBackgroundThread();
@@ -102,7 +150,8 @@ public class CamManager {
     }
 
     public void checkCameraPermission() {
-        if (ContextCompat.checkSelfPermission(mContext, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(mContext, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+        if (ContextCompat.checkSelfPermission(mContext, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED || ContextCompat
+                .checkSelfPermission(mContext, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
             requestCameraPermission();
         }
     }
@@ -119,6 +168,7 @@ public class CamManager {
             if (ContextCompat.checkSelfPermission(mContext, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
                 requestCameraPermission();
             } else {
+                Log.d(TAG, "open cameraid:" + mCameraId);
                 mCameraManager.openCamera(mCameraId, mDeviceStateCallback, mBackgroundHandler);
             }
         } catch (CameraAccessException e) {
@@ -135,15 +185,23 @@ public class CamManager {
             for (String cameraId : mCameraManager.getCameraIdList()) {
                 cameraCharacteristics = mCameraManager.getCameraCharacteristics(cameraId);
                 StreamConfigurationMap map = cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+
                 StringBuilder sb = new StringBuilder();
-                sb.append("cameraD:")
+                sb.append("cameraID:")
                   .append(cameraId)
                   .append("\n");
-                for (Size s : Arrays.asList(map.getOutputSizes(ImageFormat.JPEG))) {
+                /*for (Size s : Arrays.asList(map.getOutputSizes(ImageFormat.JPEG))) {
                     sb.append(s.toString())
                       .append("\n");
-                }
-                Log.d(TAG, "size:" + sb.toString());
+                }*/
+                sb.append("mSensorRect:")
+                  .append(mSensorRect.toString())
+                  .append("\n")
+                  .append("mMaxZoom:")
+                  .append(mMaxZoom);
+                Log.d(TAG, "CamInfo: " + sb.toString());
+
+
             }
         } catch (CameraAccessException e) {
             e.printStackTrace();
@@ -151,12 +209,13 @@ public class CamManager {
     }
 
     private void setUpCameraOutputs() {
-        mTextureView.setAspectRatio(mDefaultSize43.getWidth(),mDefaultSize43.getHeight());
         try {
             for (String cameraId : mCameraManager.getCameraIdList()) {
                 CameraCharacteristics cameraCharacteristics = mCameraManager.getCameraCharacteristics(cameraId);
                 if (cameraCharacteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_BACK) {
-                    setupImageReader();
+                    mSensorRect = cameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
+                    mMaxZoom = cameraCharacteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM);
+                    setupTextureView(cameraCharacteristics);
                     mCameraId = cameraId;
                     return;
                 }
@@ -166,8 +225,145 @@ public class CamManager {
         }
     }
 
-    private void setupImageReader() {
-        mImageReader = ImageReader.newInstance(mDefaultSize43.getWidth(), mDefaultSize43.getHeight(), ImageFormat.JPEG, /*maxImages*/2);
+    private void setupTextureView(CameraCharacteristics cameraCharacteristics) {
+        StreamConfigurationMap map = cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+        //取第一个值，为默认分辨率
+        mDefaultSize = Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)).get(0);
+        Log.d(TAG, "W: " + mDefaultSize.getWidth() + " H: " + mDefaultSize.getHeight());
+        setupImageReader(mDefaultSize);
+        // Find out if we need to swap dimension to get the preview size relative to sensor
+        // coordinate.
+        int displayRotation = mContext.getWindowManager().getDefaultDisplay().getRotation();
+        //noinspection ConstantConditions
+        mSensorOrientation = cameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
+        boolean swappedDimensions = false;
+        switch (displayRotation) {
+            case Surface.ROTATION_0:
+            case Surface.ROTATION_180:
+                if (mSensorOrientation == 90 || mSensorOrientation == 270) {
+                    swappedDimensions = true;
+                }
+                break;
+            case Surface.ROTATION_90:
+            case Surface.ROTATION_270:
+                if (mSensorOrientation == 0 || mSensorOrientation == 180) {
+                    swappedDimensions = true;
+                }
+                break;
+            default:
+                Log.e(TAG, "Display rotation is invalid: " + displayRotation);
+        }
+        //camera 输出分辨率可能大于屏幕支持范围！！！
+        Point displaySize = new Point();
+        mContext.getWindowManager().getDefaultDisplay().getSize(displaySize);
+        int rotatedPreviewWidth = mDefaultSize.getWidth();
+        int rotatedPreviewHeight = mDefaultSize.getHeight();
+        int maxPreviewWidth = displaySize.x;
+        int maxPreviewHeight = displaySize.y;
+
+        Log.d(TAG, "maxPreviewWidth:" + maxPreviewWidth + " maxPreviewHeight:" + maxPreviewHeight);
+        Log.d(TAG, "swappedDimensions:" + swappedDimensions);
+
+        if (swappedDimensions) {
+            rotatedPreviewWidth = mDefaultSize.getHeight();
+            rotatedPreviewHeight = mDefaultSize.getWidth();
+            maxPreviewWidth = displaySize.y;
+            maxPreviewHeight = displaySize.x;
+        }
+
+        if (maxPreviewWidth > MAX_PREVIEW_WIDTH) {
+            maxPreviewWidth = MAX_PREVIEW_WIDTH;
+        }
+
+        if (maxPreviewHeight > MAX_PREVIEW_HEIGHT) {
+            maxPreviewHeight = MAX_PREVIEW_HEIGHT;
+        }
+
+
+        // Danger, W.R.! Attempting to use too large a preview size could  exceed the camera
+        // bus' bandwidth limitation, resulting in gorgeous previews but the storage of
+        // garbage capture data.
+        /*mPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class),
+                rotatedPreviewWidth, rotatedPreviewHeight, maxPreviewWidth,
+                maxPreviewHeight, mDefaultSize);*/
+
+        mPreviewSize = calPreviewSize(maxPreviewWidth, maxPreviewHeight, rotatedPreviewWidth, rotatedPreviewHeight);
+
+        // We fit the aspect ratio of TextureView to the size of preview we picked.
+        int orientation = mContext.getResources().getConfiguration().orientation;
+        if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            mTextureView.setAspectRatio(
+                    mPreviewSize.getWidth(), mPreviewSize.getHeight());
+        } else {
+            mTextureView.setAspectRatio(
+                    mPreviewSize.getHeight(), mPreviewSize.getWidth());
+        }
+        mDefaultSize = mPreviewSize;
+        Log.d(TAG, "mW: " + mPreviewSize.getWidth() + " mH: " + mPreviewSize.getHeight());
+    }
+
+    private Size calPreviewSize(int maxPreviewWidth, int maxPreviewHeight, int rotatedPreviewWidth, int rotatedPreviewHeight) {
+        if (rotatedPreviewWidth >= maxPreviewWidth || rotatedPreviewHeight >= maxPreviewHeight) {
+            //照片尺寸大于屏幕，需要等比例缩小预览尺寸
+            if (maxPreviewWidth <= maxPreviewHeight) {
+                //取小的一边为基数
+                maxPreviewHeight = rotatedPreviewHeight * maxPreviewWidth / rotatedPreviewWidth;
+            }
+        }
+        return new Size(maxPreviewWidth, maxPreviewHeight);
+    }
+
+    /**
+     * Given {@code choices} of {@code Size}s supported by a camera, choose the smallest one that
+     * is at least as large as the respective texture view size, and that is at most as large as the
+     * respective max size, and whose aspect ratio matches with the specified value. If such size
+     * doesn't exist, choose the largest one that is at most as large as the respective max size,
+     * and whose aspect ratio matches with the specified value.
+     *
+     * @param choices           The list of sizes that the camera supports for the intended output
+     *                          class
+     * @param textureViewWidth  The width of the texture view relative to sensor coordinate
+     * @param textureViewHeight The height of the texture view relative to sensor coordinate
+     * @param maxWidth          The maximum width that can be chosen
+     * @param maxHeight         The maximum height that can be chosen
+     * @param aspectRatio       The aspect ratio
+     * @return The optimal {@code Size}, or an arbitrary one if none were big enough
+     */
+    private Size chooseOptimalSize(Size[] choices, int textureViewWidth,
+                                   int textureViewHeight, int maxWidth, int maxHeight, Size aspectRatio) {
+
+        // Collect the supported resolutions that are at least as big as the preview Surface
+        List<Size> bigEnough = new ArrayList<>();
+        // Collect the supported resolutions that are smaller than the preview Surface
+        List<Size> notBigEnough = new ArrayList<>();
+        int w = aspectRatio.getWidth();
+        int h = aspectRatio.getHeight();
+        for (Size option : choices) {
+            if (option.getWidth() <= maxWidth && option.getHeight() <= maxHeight &&
+                    option.getHeight() == option.getWidth() * h / w) {
+                if (option.getWidth() >= textureViewWidth &&
+                        option.getHeight() >= textureViewHeight) {
+                    bigEnough.add(option);
+                } else {
+                    notBigEnough.add(option);
+                }
+            }
+        }
+
+        // Pick the smallest of those big enough. If there is no one big enough, pick the
+        // largest of those not big enough.
+        if (bigEnough.size() > 0) {
+            return Collections.min(bigEnough, new CompareSizesByArea());
+        } else if (notBigEnough.size() > 0) {
+            return Collections.max(notBigEnough, new CompareSizesByArea());
+        } else {
+            Log.e(TAG, "Couldn't find any suitable preview size");
+            return choices[0];
+        }
+    }
+
+    private void setupImageReader(Size s) {
+        mImageReader = ImageReader.newInstance(s.getWidth(), s.getHeight(), ImageFormat.JPEG, /*maxImages*/2);
         mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mBackgroundHandler);
     }
 
@@ -194,21 +390,39 @@ public class CamManager {
         stopBackgroundThread();
     }
 
-    public void takeShot() {
+    public String takeShot() {
         imageName = SaveImage.getImageName();
         Log.d(TAG, "imageName" + imageName);
         sendShotRequest();
+        return imageName;
     }
 
     private void sendShotRequest() {
         Log.d(TAG, "sendShotRequest");
         try {
-            CaptureRequest.Builder reuqestbuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
-            reuqestbuilder.addTarget(mImageReader.getSurface());
-            mCameraCaptureSession.capture(reuqestbuilder.build(), mCaptureCallback, mBackgroundHandler);
+            CaptureRequest.Builder captureBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
+            captureBuilder.addTarget(mImageReader.getSurface());
+            // Orientation
+            int rotation = mContext.getWindowManager().getDefaultDisplay().getRotation();
+            captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, getOrientation(rotation));
+            mCameraCaptureSession.capture(captureBuilder.build(), mCaptureCallback, mBackgroundHandler);
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
+    }
+
+    /**
+     * Retrieves the JPEG orientation from the specified screen rotation.
+     *
+     * @param rotation The screen rotation.
+     * @return The JPEG orientation (one of 0, 90, 270, and 360)
+     */
+    private int getOrientation(int rotation) {
+        // Sensor orientation is 90 for most devices, or 270 for some devices (eg. Nexus 5X)
+        // We have to take that into account and rotate JPEG properly.
+        // For devices with orientation of 90, we simply return our mapping from ORIENTATIONS.
+        // For devices with orientation of 270, we need to rotate the JPEG 180 degrees.
+        return (ORIENTATIONS.get(rotation) + mSensorOrientation + 270) % 360;
     }
 
     /**
@@ -224,13 +438,15 @@ public class CamManager {
      * Stops the background thread and its {@link Handler}.
      */
     private void stopBackgroundThread() {
-        mBackgroundThread.quitSafely();
-        try {
-            mBackgroundThread.join();
-            mBackgroundThread = null;
-            mBackgroundHandler = null;
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+        if (mBackgroundThread != null) {
+            mBackgroundThread.quitSafely();
+            try {
+                mBackgroundThread.join();
+                mBackgroundThread = null;
+                mBackgroundHandler = null;
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         }
     }
 
@@ -256,11 +472,11 @@ public class CamManager {
         @Override
         public int compare(Size lhs, Size rhs) {
             // We cast here to ensure the multiplications won't overflow
-            return Long.signum((long) lhs.getWidth() * lhs.getHeight() - (long) rhs.getWidth() * rhs.getHeight());
+            return Long.signum((long) lhs.getWidth() * lhs.getHeight() - (long) rhs.getWidth() * rhs
+                    .getHeight());
         }
 
     }
-
 
     private CameraDevice.StateCallback mDeviceStateCallback = new CameraDevice.StateCallback() {
         @Override
@@ -314,13 +530,12 @@ public class CamManager {
         Log.d(TAG, "createCameraPreviewSession");
         try {
             SurfaceTexture texture = mTextureView.getSurfaceTexture();
-            assert texture != null;
 
             // We configure the size of default buffer to be the size of camera preview we want.
-            texture.setDefaultBufferSize(mDefaultSize43.getWidth(), mDefaultSize43.getHeight());
+            texture.setDefaultBufferSize(mDefaultSize.getWidth(), mDefaultSize.getHeight());
 
             // This is the output Surface we need to start preview.
-            Surface surface = new Surface(texture);
+            surface = new Surface(texture);
 
             // We set up a CaptureRequest.Builder with the output Surface.
             mPreviewRequestBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
@@ -339,16 +554,10 @@ public class CamManager {
 
                     // When the session is ready, we start displaying the preview.
                     mCameraCaptureSession = cameraCaptureSession;
-                    try {
-                        // Auto focus should be continuous for camera preview.
-                        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+                    // Auto focus should be continuous for camera preview.
+                    mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+                    setRepeating();
 
-                        // Finally, we start displaying the camera preview.
-                        mPreviewRequest = mPreviewRequestBuilder.build();
-                        mCameraCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
-                    } catch (CameraAccessException e) {
-                        e.printStackTrace();
-                    }
                 }
 
                 @Override
@@ -360,7 +569,38 @@ public class CamManager {
         }
     }
 
-    public void setZoom(int zoomLevel){
+    private void setRepeating() {
+        // Finally, we start displaying the camera preview.
+        mPreviewRequest = mPreviewRequestBuilder.build();
+        try {
+            mCameraCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        }
+    }
 
+    /**
+     * Calculates sensor crop region for a zoom level (zoom >= 1.0).
+     *
+     * @param ratio the zoom level.
+     * @return Crop region.
+     */
+    private Rect cropRegionForZoom(float ratio) {
+        Log.d(TAG, "ratio:" + ratio);
+        int xCenter = mSensorRect.width() / 2;
+        int yCenter = mSensorRect.height() / 2;
+        int xDelta = (int) (0.5f * mSensorRect.width() / ratio);
+        int yDelta = (int) (0.5f * mSensorRect.height() / ratio);
+        /*Log.d(TAG, "xCenter:" + xCenter);
+        Log.d(TAG, "yCenter:" + yCenter);
+        Log.d(TAG, "xDelta:" + xDelta);
+        Log.d(TAG, "yDelta:" + yDelta);*/
+        return new Rect(xCenter - xDelta, yCenter - yDelta, xCenter + xDelta, yCenter + yDelta);
+    }
+
+    public void setZoomRatio(float zoomRatio) {
+        Log.d(TAG, "zoomRatio:" + zoomRatio);
+        mPreviewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, cropRegionForZoom(zoomRatio));
+        setRepeating();
     }
 }
