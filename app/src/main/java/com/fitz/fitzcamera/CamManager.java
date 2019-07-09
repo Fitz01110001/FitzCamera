@@ -28,18 +28,14 @@ import android.util.SparseIntArray;
 import android.view.Surface;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-import androidx.fragment.app.Fragment;
 
 import com.fitz.fitzcamera.fragments.CommonCap;
 import com.fitz.fitzcamera.ui.AutoFitTextureView;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
 
 /**
  * Manager capture
@@ -100,15 +96,31 @@ public class CamManager {
      */
     private String mCameraId;
 
+    /**
+     * 广角和主摄之间的zoom差值
+     * */
+    private final float zoomDiff = 0.4f;
+
+    /**
+     * 默认后置主摄
+     */
+    private String mDefaultCameraId = "0";
+    /**
+     * 广角镜头id，LG：2 HW：3
+     */
+    private final static String mWideCameraId = "2";
+
     private Activity mContext;
 
-    private CommonCap mFragment;
+    private CameraInfoCallback mCameraInfoCallback;
 
     private Rect mSensorRect;
 
     private float mMaxZoom;
 
     private CameraDevice mCameraDevice;
+
+    private CameraCharacteristics mCameraCharacteristics;
 
     private Surface surface;
 
@@ -142,11 +154,18 @@ public class CamManager {
     private AutoFitTextureView mTextureView;
 
     public CamManager(CommonCap fg, Activity context) {
-        mFragment = fg;
         mContext = context;
         mCameraManager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
         startBackgroundThread();
+    }
 
+    public String[] getCameraIDList() {
+        try {
+            return mCameraManager.getCameraIdList();
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
     public void checkCameraPermission() {
@@ -160,21 +179,6 @@ public class CamManager {
         ActivityCompat.requestPermissions(mContext, new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1);
     }
 
-    public void openCamera(AutoFitTextureView textureView, int width, int height) {
-        mTextureView = textureView;
-        //getCamInfo();
-        setUpCameraOutputs();
-        try {
-            if (ContextCompat.checkSelfPermission(mContext, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                requestCameraPermission();
-            } else {
-                Log.d(TAG, "open cameraid:" + mCameraId);
-                mCameraManager.openCamera(mCameraId, mDeviceStateCallback, mBackgroundHandler);
-            }
-        } catch (CameraAccessException e) {
-            e.printStackTrace();
-        }
-    }
 
     /**
      * 获取 cameraID 对应支持的分辨率
@@ -208,160 +212,6 @@ public class CamManager {
         }
     }
 
-    private void setUpCameraOutputs() {
-        try {
-            for (String cameraId : mCameraManager.getCameraIdList()) {
-                CameraCharacteristics cameraCharacteristics = mCameraManager.getCameraCharacteristics(cameraId);
-                if (cameraCharacteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_BACK) {
-                    mSensorRect = cameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
-                    mMaxZoom = cameraCharacteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM);
-                    setupTextureView(cameraCharacteristics);
-                    mCameraId = cameraId;
-                    return;
-                }
-            }
-        } catch (CameraAccessException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void setupTextureView(CameraCharacteristics cameraCharacteristics) {
-        StreamConfigurationMap map = cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
-        //取第一个值，为默认分辨率
-        mDefaultSize = Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)).get(0);
-        Log.d(TAG, "W: " + mDefaultSize.getWidth() + " H: " + mDefaultSize.getHeight());
-        setupImageReader(mDefaultSize);
-        // Find out if we need to swap dimension to get the preview size relative to sensor
-        // coordinate.
-        int displayRotation = mContext.getWindowManager().getDefaultDisplay().getRotation();
-        //noinspection ConstantConditions
-        mSensorOrientation = cameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
-        boolean swappedDimensions = false;
-        switch (displayRotation) {
-            case Surface.ROTATION_0:
-            case Surface.ROTATION_180:
-                if (mSensorOrientation == 90 || mSensorOrientation == 270) {
-                    swappedDimensions = true;
-                }
-                break;
-            case Surface.ROTATION_90:
-            case Surface.ROTATION_270:
-                if (mSensorOrientation == 0 || mSensorOrientation == 180) {
-                    swappedDimensions = true;
-                }
-                break;
-            default:
-                Log.e(TAG, "Display rotation is invalid: " + displayRotation);
-        }
-        //camera 输出分辨率可能大于屏幕支持范围！！！
-        Point displaySize = new Point();
-        mContext.getWindowManager().getDefaultDisplay().getSize(displaySize);
-        int rotatedPreviewWidth = mDefaultSize.getWidth();
-        int rotatedPreviewHeight = mDefaultSize.getHeight();
-        int maxPreviewWidth = displaySize.x;
-        int maxPreviewHeight = displaySize.y;
-
-        Log.d(TAG, "maxPreviewWidth:" + maxPreviewWidth + " maxPreviewHeight:" + maxPreviewHeight);
-        Log.d(TAG, "swappedDimensions:" + swappedDimensions);
-
-        if (swappedDimensions) {
-            rotatedPreviewWidth = mDefaultSize.getHeight();
-            rotatedPreviewHeight = mDefaultSize.getWidth();
-            maxPreviewWidth = displaySize.y;
-            maxPreviewHeight = displaySize.x;
-        }
-
-        if (maxPreviewWidth > MAX_PREVIEW_WIDTH) {
-            maxPreviewWidth = MAX_PREVIEW_WIDTH;
-        }
-
-        if (maxPreviewHeight > MAX_PREVIEW_HEIGHT) {
-            maxPreviewHeight = MAX_PREVIEW_HEIGHT;
-        }
-
-
-        // Danger, W.R.! Attempting to use too large a preview size could  exceed the camera
-        // bus' bandwidth limitation, resulting in gorgeous previews but the storage of
-        // garbage capture data.
-        /*mPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class),
-                rotatedPreviewWidth, rotatedPreviewHeight, maxPreviewWidth,
-                maxPreviewHeight, mDefaultSize);*/
-
-        mPreviewSize = calPreviewSize(maxPreviewWidth, maxPreviewHeight, rotatedPreviewWidth, rotatedPreviewHeight);
-
-        // We fit the aspect ratio of TextureView to the size of preview we picked.
-        int orientation = mContext.getResources().getConfiguration().orientation;
-        if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
-            mTextureView.setAspectRatio(
-                    mPreviewSize.getWidth(), mPreviewSize.getHeight());
-        } else {
-            mTextureView.setAspectRatio(
-                    mPreviewSize.getHeight(), mPreviewSize.getWidth());
-        }
-        mDefaultSize = mPreviewSize;
-        Log.d(TAG, "mW: " + mPreviewSize.getWidth() + " mH: " + mPreviewSize.getHeight());
-    }
-
-    private Size calPreviewSize(int maxPreviewWidth, int maxPreviewHeight, int rotatedPreviewWidth, int rotatedPreviewHeight) {
-        if (rotatedPreviewWidth >= maxPreviewWidth || rotatedPreviewHeight >= maxPreviewHeight) {
-            //照片尺寸大于屏幕，需要等比例缩小预览尺寸
-            if (maxPreviewWidth <= maxPreviewHeight) {
-                //取小的一边为基数
-                maxPreviewHeight = rotatedPreviewHeight * maxPreviewWidth / rotatedPreviewWidth;
-            }
-        }
-        return new Size(maxPreviewWidth, maxPreviewHeight);
-    }
-
-    /**
-     * Given {@code choices} of {@code Size}s supported by a camera, choose the smallest one that
-     * is at least as large as the respective texture view size, and that is at most as large as the
-     * respective max size, and whose aspect ratio matches with the specified value. If such size
-     * doesn't exist, choose the largest one that is at most as large as the respective max size,
-     * and whose aspect ratio matches with the specified value.
-     *
-     * @param choices           The list of sizes that the camera supports for the intended output
-     *                          class
-     * @param textureViewWidth  The width of the texture view relative to sensor coordinate
-     * @param textureViewHeight The height of the texture view relative to sensor coordinate
-     * @param maxWidth          The maximum width that can be chosen
-     * @param maxHeight         The maximum height that can be chosen
-     * @param aspectRatio       The aspect ratio
-     * @return The optimal {@code Size}, or an arbitrary one if none were big enough
-     */
-    private Size chooseOptimalSize(Size[] choices, int textureViewWidth,
-                                   int textureViewHeight, int maxWidth, int maxHeight, Size aspectRatio) {
-
-        // Collect the supported resolutions that are at least as big as the preview Surface
-        List<Size> bigEnough = new ArrayList<>();
-        // Collect the supported resolutions that are smaller than the preview Surface
-        List<Size> notBigEnough = new ArrayList<>();
-        int w = aspectRatio.getWidth();
-        int h = aspectRatio.getHeight();
-        for (Size option : choices) {
-            if (option.getWidth() <= maxWidth && option.getHeight() <= maxHeight &&
-                    option.getHeight() == option.getWidth() * h / w) {
-                if (option.getWidth() >= textureViewWidth &&
-                        option.getHeight() >= textureViewHeight) {
-                    bigEnough.add(option);
-                } else {
-                    notBigEnough.add(option);
-                }
-            }
-        }
-
-        // Pick the smallest of those big enough. If there is no one big enough, pick the
-        // largest of those not big enough.
-        if (bigEnough.size() > 0) {
-            return Collections.min(bigEnough, new CompareSizesByArea());
-        } else if (notBigEnough.size() > 0) {
-            return Collections.max(notBigEnough, new CompareSizesByArea());
-        } else {
-            Log.e(TAG, "Couldn't find any suitable preview size");
-            return choices[0];
-        }
-    }
-
     private void setupImageReader(Size s) {
         mImageReader = ImageReader.newInstance(s.getWidth(), s.getHeight(), ImageFormat.JPEG, /*maxImages*/2);
         mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mBackgroundHandler);
@@ -372,6 +222,11 @@ public class CamManager {
      */
     private void closeCamera() {
         if (null != mCameraCaptureSession) {
+            try {
+                mCameraCaptureSession.stopRepeating();
+            } catch (CameraAccessException e) {
+                e.printStackTrace();
+            }
             mCameraCaptureSession.close();
             mCameraCaptureSession = null;
         }
@@ -465,19 +320,144 @@ public class CamManager {
     };
 
     /**
-     * Compares two {@code Size}s based on their areas.
+     * open camera with given id
      */
-    static class CompareSizesByArea implements Comparator<Size> {
-
-        @Override
-        public int compare(Size lhs, Size rhs) {
-            // We cast here to ensure the multiplications won't overflow
-            return Long.signum((long) lhs.getWidth() * lhs.getHeight() - (long) rhs.getWidth() * rhs
-                    .getHeight());
+    public void openCamera(AutoFitTextureView textureView) {
+        mTextureView = textureView;
+        try {
+            for (String cameraId : mCameraManager.getCameraIdList()) {
+                mCameraCharacteristics = mCameraManager.getCameraCharacteristics(cameraId);
+                if (mCameraCharacteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_BACK) {
+                    mDefaultCameraId = cameraId;
+                    mCameraId = cameraId;
+                    openCamera(mCameraId);
+                    return;
+                }
+            }
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
         }
-
     }
 
+    private void openCamera(String cameraId) {
+        mCameraId = cameraId;
+        try {
+            mCameraCharacteristics = mCameraManager.getCameraCharacteristics(mCameraId);
+            if (mCameraInfoCallback != null) {
+                mCameraInfoCallback.cameraFacing(mCameraCharacteristics.get(CameraCharacteristics.LENS_FACING));
+            }
+            setUpCameraOutputs();
+            if (ContextCompat.checkSelfPermission(mContext, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                requestCameraPermission();
+            } else {
+                Log.d(TAG, "open cameraid:" + mCameraId);
+                mCameraManager.openCamera(mCameraId, mDeviceStateCallback, mBackgroundHandler);
+            }
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 获取一些camera信息
+     */
+    private void setUpCameraOutputs() {
+        mSensorRect = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
+        mMaxZoom = mCameraCharacteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM);
+        setupTextureView();
+    }
+
+    /**
+     * 計算預覽尺寸
+     */
+    private void setupTextureView() {
+        StreamConfigurationMap map = mCameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+        //取第一个值，为默认分辨率
+        mDefaultSize = Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)).get(0);
+        Log.d(TAG, "W: " + mDefaultSize.getWidth() + " H: " + mDefaultSize.getHeight());
+        setupImageReader(mDefaultSize);
+        // Find out if we need to swap dimension to get the preview size relative to sensor
+        // coordinate.
+        int displayRotation = mContext.getWindowManager().getDefaultDisplay().getRotation();
+        //noinspection ConstantConditions
+        mSensorOrientation = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
+        boolean swappedDimensions = false;
+        switch (displayRotation) {
+            case Surface.ROTATION_0:
+            case Surface.ROTATION_180:
+                if (mSensorOrientation == 90 || mSensorOrientation == 270) {
+                    swappedDimensions = true;
+                }
+                break;
+            case Surface.ROTATION_90:
+            case Surface.ROTATION_270:
+                if (mSensorOrientation == 0 || mSensorOrientation == 180) {
+                    swappedDimensions = true;
+                }
+                break;
+            default:
+                Log.e(TAG, "Display rotation is invalid: " + displayRotation);
+        }
+        //camera 输出分辨率可能大于屏幕支持范围！！！
+        Point displaySize = new Point();
+        mContext.getWindowManager().getDefaultDisplay().getSize(displaySize);
+        int rotatedPreviewWidth = mDefaultSize.getWidth();
+        int rotatedPreviewHeight = mDefaultSize.getHeight();
+        int maxPreviewWidth = displaySize.x;
+        int maxPreviewHeight = displaySize.y;
+
+        Log.d(TAG, "maxPreviewWidth:" + maxPreviewWidth + " maxPreviewHeight:" + maxPreviewHeight);
+        Log.d(TAG, "swappedDimensions:" + swappedDimensions);
+
+        if (swappedDimensions) {
+            rotatedPreviewWidth = mDefaultSize.getHeight();
+            rotatedPreviewHeight = mDefaultSize.getWidth();
+            maxPreviewWidth = displaySize.y;
+            maxPreviewHeight = displaySize.x;
+        }
+
+        if (maxPreviewWidth > MAX_PREVIEW_WIDTH) {
+            maxPreviewWidth = MAX_PREVIEW_WIDTH;
+        }
+
+        if (maxPreviewHeight > MAX_PREVIEW_HEIGHT) {
+            maxPreviewHeight = MAX_PREVIEW_HEIGHT;
+        }
+
+        mPreviewSize = calPreviewSize(maxPreviewWidth, maxPreviewHeight, rotatedPreviewWidth, rotatedPreviewHeight);
+
+        // We fit the aspect ratio of TextureView to the size of preview we picked.
+        int orientation = mContext.getResources().getConfiguration().orientation;
+        if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            mTextureView.setAspectRatio(
+                    mPreviewSize.getWidth(), mPreviewSize.getHeight());
+        } else {
+            mTextureView.setAspectRatio(
+                    mPreviewSize.getHeight(), mPreviewSize.getWidth());
+        }
+        mDefaultSize = mPreviewSize;
+        Log.d(TAG, "mW: " + mPreviewSize.getWidth() + " mH: " + mPreviewSize.getHeight());
+    }
+
+    private Size calPreviewSize(int maxPreviewWidth, int maxPreviewHeight, int rotatedPreviewWidth, int rotatedPreviewHeight) {
+        Log.d(TAG, maxPreviewWidth + " " + maxPreviewHeight + " " + rotatedPreviewWidth + " " + rotatedPreviewHeight);
+        if (rotatedPreviewWidth >= maxPreviewWidth || rotatedPreviewHeight >= maxPreviewHeight) {
+            //照片尺寸大于屏幕，需要等比例缩小预览尺寸
+            //取小的一边为基数
+            float proportion = (float) rotatedPreviewHeight / (float) rotatedPreviewWidth;
+            Log.d(TAG, "proportion:" + proportion);
+            if (maxPreviewWidth <= maxPreviewHeight) {
+                maxPreviewHeight = (int) (proportion * maxPreviewHeight);
+            } else {
+                maxPreviewWidth = (int) (proportion * maxPreviewHeight);
+            }
+        }
+        return new Size(maxPreviewWidth, maxPreviewHeight);
+    }
+
+    /**
+     * camera device onOpened state callback
+     */
     private CameraDevice.StateCallback mDeviceStateCallback = new CameraDevice.StateCallback() {
         @Override
         public void onOpened(@NonNull CameraDevice camera) {
@@ -493,33 +473,6 @@ public class CamManager {
         @Override
         public void onError(@NonNull CameraDevice camera, int error) {
 
-        }
-    };
-
-    private CameraCaptureSession.CaptureCallback mCaptureCallback = new CameraCaptureSession.CaptureCallback() {
-
-        @Override
-        public void onCaptureStarted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, long timestamp, long frameNumber) {
-            super.onCaptureStarted(session, request, timestamp, frameNumber);
-        }
-
-
-        @Override
-        public void onCaptureProgressed(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request,
-                                        @NonNull CaptureResult partialResult) {
-            super.onCaptureProgressed(session, request, partialResult);
-        }
-
-
-        @Override
-        public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult result) {
-            super.onCaptureCompleted(session, request, result);
-        }
-
-
-        @Override
-        public void onCaptureFailed(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull CaptureFailure failure) {
-            super.onCaptureFailed(session, request, failure);
         }
     };
 
@@ -556,8 +509,10 @@ public class CamManager {
                     mCameraCaptureSession = cameraCaptureSession;
                     // Auto focus should be continuous for camera preview.
                     mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
-                    setRepeating();
-
+                    if(mCameraInfoCallback != null){
+                        mCameraInfoCallback.cameraDeviceOnConfigured(mPreviewRequestBuilder);
+                    }
+                    setRepeatingPreview();
                 }
 
                 @Override
@@ -569,15 +524,51 @@ public class CamManager {
         }
     }
 
-    private void setRepeating() {
+    /**
+     * 发起重复预览请求
+     */
+    private void setRepeatingPreview() {
         // Finally, we start displaying the camera preview.
+
         mPreviewRequest = mPreviewRequestBuilder.build();
         try {
-            mCameraCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
+            if(mCameraCaptureSession != null){
+                mCameraCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
+            }
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
     }
+
+    /**
+     * preview callback
+     */
+    private CameraCaptureSession.CaptureCallback mCaptureCallback = new CameraCaptureSession.CaptureCallback() {
+
+        @Override
+        public void onCaptureStarted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, long timestamp, long frameNumber) {
+            super.onCaptureStarted(session, request, timestamp, frameNumber);
+        }
+
+
+        @Override
+        public void onCaptureProgressed(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request,
+                                        @NonNull CaptureResult partialResult) {
+            super.onCaptureProgressed(session, request, partialResult);
+        }
+
+
+        @Override
+        public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult result) {
+            super.onCaptureCompleted(session, request, result);
+        }
+
+
+        @Override
+        public void onCaptureFailed(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull CaptureFailure failure) {
+            super.onCaptureFailed(session, request, failure);
+        }
+    };
 
     /**
      * Calculates sensor crop region for a zoom level (zoom >= 1.0).
@@ -599,8 +590,48 @@ public class CamManager {
     }
 
     public void setZoomRatio(float zoomRatio) {
-        Log.d(TAG, "zoomRatio:" + zoomRatio);
-        mPreviewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, cropRegionForZoom(zoomRatio));
-        setRepeating();
+        Log.d(TAG, mCameraId + " zoomRatio:" + zoomRatio);
+        if (!mCameraId.equals(mWideCameraId) && zoomRatio >= 1.0f) {
+            //非广角镜头的zoom
+            mPreviewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, cropRegionForZoom(zoomRatio));
+            setRepeatingPreview();
+        } else if (!mCameraId.equals(mWideCameraId) && zoomRatio < 1.0f) {
+            //非广角镜头zoom到1.0以下，应切换到广角。并在启动广角时，设置zoom=1+zoomdiff
+            switchCamera(mWideCameraId, new CameraInfoCallback() {
+                @Override
+                public void cameraFacing(int facing) {
+
+                }
+
+                @Override
+                public void cameraDeviceOnConfigured(CaptureRequest.Builder builder) {
+                    builder.set(CaptureRequest.SCALER_CROP_REGION, cropRegionForZoom(1.4f));
+                }
+            });
+        } else if (mCameraId.equals(mWideCameraId) && zoomRatio >= 1.0f) {
+            //广角镜头zoom到1X以上，广角镜头切到主摄
+            switchCamera(mDefaultCameraId,null);
+        } else if (mCameraId.equals(mWideCameraId) && zoomRatio < 1.0f) {
+            //广角镜头下zoom,广角镜头zoom范围也是 1.0~max,zoomRatio需要换算
+            zoomRatio += zoomDiff;
+            mPreviewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, cropRegionForZoom(zoomRatio));
+            setRepeatingPreview();
+        }
     }
+
+    public void switchCamera(String cameraId, @Nullable CameraInfoCallback cameraInfoCallback) {
+        mCameraInfoCallback = cameraInfoCallback;
+        closeCamera();
+        openCamera(cameraId);
+    }
+
+    /**
+     * 用于给UI回调camera信息
+     */
+    public interface CameraInfoCallback {
+        void cameraFacing(int facing);
+        void cameraDeviceOnConfigured(CaptureRequest.Builder builder);
+    }
+
+
 }

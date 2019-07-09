@@ -13,16 +13,17 @@
         android:layout_alignParentStart="true"
         android:layout_alignParentTop="true" />
 
+
     <SeekBar
         android:id="@+id/zoombar"
         android:layout_width="match_parent"
         android:layout_height="40dp"
         android:layout_above="@id/camera_control"
-        android:max="4000"
-        android:min="1000"
-        android:progress="1000" />
+        android:max="400"
+        android:min="60"
+        android:progress="100" />
 
-    <FrameLayout
+    <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/camera_control"
         android:layout_width="match_parent"
         android:layout_height="150dp"
@@ -34,25 +35,39 @@
             android:id="@+id/tv_zoomLevel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_above="@id/button_shutter"
-            android:layout_gravity="center_horizontal"
             android:text="1.0x"
             android:textAppearance="@style/TextAppearance.AppCompat.Large"
-            android:textColor="@color/qmui_config_color_white" />
+            android:textColor="@color/qmui_config_color_white"
+            app:layout_constraintBottom_toTopOf="@+id/button_shutter"
+            app:layout_constraintEnd_toEndOf="@+id/button_shutter"
+            app:layout_constraintStart_toStartOf="@+id/button_shutter"
+            app:layout_constraintTop_toTopOf="parent" />
 
         <com.qmuiteam.qmui.widget.roundwidget.QMUIRoundButton
             android:id="@+id/button_shutter"
             android:layout_width="80dp"
             android:layout_height="80dp"
-            android:layout_centerInParent="true"
-            android:layout_gravity="center"
             android:clickable="true"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
             app:qmui_backgroundColor="#00FAFAFA"
             app:qmui_borderWidth="8dp"
             app:qmui_isRadiusAdjustBounds="false"
             app:qmui_radius="100dp" />
 
-    </FrameLayout>
+        <ImageButton
+            android:id="@+id/button_switchCamera"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/button_shutter"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:srcCompat="@drawable/qmui_icon_checkbox_checked" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
 
 </RelativeLayout>
