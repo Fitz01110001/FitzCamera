@@ -48,7 +48,7 @@ public class CommonCap extends Fragment {
     /**
      * 拍照用的 buttn
      */
-    private Button shutter;
+    private ImageButton shutter;
 
     private ImageButton switchCamera;
 
@@ -191,6 +191,7 @@ public class CommonCap extends Fragment {
     public void onResume() {
         super.onResume();
         mSeekBar.setProgress(defaultProgress);
+        setZoomRatioText((int)defaultProgress/100);
         if (mTextureView.isAvailable()) {
             mCamManager.openCamera(mTextureView);
         } else {

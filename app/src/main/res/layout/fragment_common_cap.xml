@@ -35,7 +35,6 @@
             android:id="@+id/tv_zoomLevel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="1.0x"
             android:textAppearance="@style/TextAppearance.AppCompat.Large"
             android:textColor="@color/qmui_config_color_white"
             app:layout_constraintBottom_toTopOf="@+id/button_shutter"
@@ -43,29 +42,28 @@
             app:layout_constraintStart_toStartOf="@+id/button_shutter"
             app:layout_constraintTop_toTopOf="parent" />
 
-        <com.qmuiteam.qmui.widget.roundwidget.QMUIRoundButton
+        <ImageButton
             android:id="@+id/button_shutter"
             android:layout_width="80dp"
             android:layout_height="80dp"
             android:clickable="true"
+            android:background="@drawable/shutter"
+            android:scaleType="centerInside"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:qmui_backgroundColor="#00FAFAFA"
-            app:qmui_borderWidth="8dp"
-            app:qmui_isRadiusAdjustBounds="false"
-            app:qmui_radius="100dp" />
+            app:layout_constraintTop_toTopOf="parent" />
 
         <ImageButton
             android:id="@+id/button_switchCamera"
             android:layout_width="40dp"
             android:layout_height="40dp"
+            android:background="@drawable/switch_camera"
+            android:scaleType="centerInside"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toStartOf="@+id/button_shutter"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:srcCompat="@drawable/qmui_icon_checkbox_checked" />
+            app:layout_constraintTop_toTopOf="parent" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
