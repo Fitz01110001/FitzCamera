@@ -1,5 +1,6 @@
 package com.fitz.fitzcamera.fragments;
 
+import android.graphics.PixelFormat;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CaptureRequest;
@@ -70,9 +71,9 @@ public class CommonCap extends Fragment {
             switch (v.getId()) {
                 case R.id.button_shutter:
                     Log.d(TAG, "点击拍照");
-                    String imageUri = mCamManager.takeShot();
-                    Toast.makeText(CommonCap.this.getActivity(), imageUri, Toast.LENGTH_SHORT)
-                         .show();
+                    //mCamManager.onPause();
+                    //String imageUri = mCamManager.takeShot();
+                    //Toast.makeText(CommonCap.this.getActivity(), imageUri, Toast.LENGTH_SHORT).show();
                     break;
                 case R.id.button_switchCamera:
                     initListPopupIfNeed();
@@ -153,6 +154,7 @@ public class CommonCap extends Fragment {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getActivity().getWindow().setFormat(PixelFormat.TRANSLUCENT);
         mCamManager = new CamManager(this, this.getActivity());
         mCamManager.checkCameraPermission();
     }
@@ -177,7 +179,7 @@ public class CommonCap extends Fragment {
     }
 
     private void setZoomRatioText(float zoomzoomRatio) {
-        DecimalFormat df = new DecimalFormat("0.0");
+        DecimalFormat df = new DecimalFormat("0.000");
         df.setRoundingMode(RoundingMode.HALF_UP);
         mZoomLevel.setText(df.format(zoomzoomRatio) + "x");
     }
@@ -207,12 +209,13 @@ public class CommonCap extends Fragment {
 
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture texture, int width, int height) {
+            Log.d(TAG,"onSurfaceTextureAvailable");
             mCamManager.openCamera(mTextureView);
         }
 
         @Override
         public void onSurfaceTextureSizeChanged(SurfaceTexture texture, int width, int height) {
-
+            Log.d(TAG,"onSurfaceTextureSizeChanged");
         }
 
         @Override
@@ -222,6 +225,8 @@ public class CommonCap extends Fragment {
 
         @Override
         public void onSurfaceTextureUpdated(SurfaceTexture texture) {
+            Log.d(TAG,"onSurfaceTextureUpdated");
+
         }
 
     };

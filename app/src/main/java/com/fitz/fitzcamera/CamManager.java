@@ -37,6 +37,8 @@ import com.fitz.fitzcamera.ui.AutoFitTextureView;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Timer;
+import java.util.TimerTask;
 
 /**
  * Manager capture
@@ -118,7 +120,7 @@ public class CamManager {
     private final HashMap<String, Float> deviceWideCameraZoomDiff = new HashMap<String, Float>() {
         {
             put(deviceBrandLG, 0.4f);
-            put(deviceBrandHW, 0.7f);
+            put(deviceBrandHW, 0.8f);
         }
     };
 
@@ -191,7 +193,8 @@ public class CamManager {
     }
 
     public void checkCameraPermission() {
-        if (ContextCompat.checkSelfPermission(mContext, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(mContext, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+        if (ContextCompat.checkSelfPermission(mContext, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED || ContextCompat
+                .checkSelfPermission(mContext, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
             requestCameraPermission();
         }
     }
@@ -364,6 +367,7 @@ public class CamManager {
 
     private void openCamera(String cameraId) {
         mCameraId = cameraId;
+
         try {
             mCameraCharacteristics = mCameraManager.getCameraCharacteristics(mCameraId);
             if (mCameraInfoCallback != null) {
@@ -379,6 +383,7 @@ public class CamManager {
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
+
     }
 
     /**
@@ -556,7 +561,6 @@ public class CamManager {
      */
     private void setRepeatingPreview() {
         // Finally, we start displaying the camera preview.
-
         mPreviewRequest = mPreviewRequestBuilder.build();
         try {
             if (mCameraCaptureSession != null) {
@@ -575,6 +579,7 @@ public class CamManager {
         @Override
         public void onCaptureStarted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, long timestamp, long frameNumber) {
             super.onCaptureStarted(session, request, timestamp, frameNumber);
+
         }
 
 
@@ -582,14 +587,34 @@ public class CamManager {
         public void onCaptureProgressed(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request,
                                         @NonNull CaptureResult partialResult) {
             super.onCaptureProgressed(session, request, partialResult);
+
         }
 
 
         @Override
         public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult result) {
             super.onCaptureCompleted(session, request, result);
+
+
         }
 
+        @Override
+        public void onCaptureSequenceAborted(@NonNull CameraCaptureSession session, int sequenceId) {
+            super.onCaptureSequenceAborted(session, sequenceId);
+            Log.d(TAG,"onCaptureSequenceAborted" );
+        }
+
+        @Override
+        public void onCaptureBufferLost(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull Surface target, long frameNumber) {
+            super.onCaptureBufferLost(session, request, target, frameNumber);
+            Log.d(TAG,"onCaptureBufferLost" );
+        }
+
+        @Override
+        public void onCaptureSequenceCompleted(@NonNull CameraCaptureSession session, int sequenceId, long frameNumber) {
+            super.onCaptureSequenceCompleted(session, sequenceId, frameNumber);
+            Log.d(TAG,"onCaptureSequenceCompleted" );
+        }
 
         @Override
         public void onCaptureFailed(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull CaptureFailure failure) {
@@ -632,7 +657,8 @@ public class CamManager {
 
                 @Override
                 public void cameraDeviceOnConfigured(CaptureRequest.Builder builder) {
-                    builder.set(CaptureRequest.SCALER_CROP_REGION, cropRegionForZoom(1.4f));
+                    Log.d(TAG, "builder.set zoomDiff");
+                    builder.set(CaptureRequest.SCALER_CROP_REGION, cropRegionForZoom(1 + zoomDiff));
                 }
             });
         } else if (mCameraId.equals(mWideCameraId) && zoomRatio >= 1.0f) {
