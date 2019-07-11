@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.graphics.Bitmap;
 import android.graphics.ImageFormat;
 import android.graphics.Point;
 import android.graphics.Rect;
@@ -37,8 +38,6 @@ import com.fitz.fitzcamera.ui.AutoFitTextureView;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Timer;
-import java.util.TimerTask;
 
 /**
  * Manager capture
@@ -108,7 +107,7 @@ public class CamManager {
 
     private final String deviceBrandHW = "HW";
 
-    private String currentDeviceBrand = deviceBrandHW;
+    private String currentDeviceBrand = deviceBrandLG;
 
     private final HashMap<String, String> deviceWideCameraIdMap = new HashMap<String, String>() {
         {
@@ -140,7 +139,16 @@ public class CamManager {
 
     private Rect mSensorRect;
 
-    private float mMaxZoom;
+    /**
+     * 当前zoom值
+     */
+    private Rect mCurrentRect;
+
+    private float mMaxZoom = 1.0f;
+
+    private float mCurrentZoom = 1.0f;
+
+    private final float defaultZoomRatio = 1.0f;
 
     private CameraDevice mCameraDevice;
 
@@ -266,7 +274,7 @@ public class CamManager {
 
     public void onPause() {
         closeCamera();
-        stopBackgroundThread();
+        //stopBackgroundThread();
     }
 
     public String takeShot() {
@@ -286,10 +294,15 @@ public class CamManager {
                                    .getDefaultDisplay()
                                    .getRotation();
             captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, getOrientation(rotation));
+            setZoomRation(captureBuilder);
             mCameraCaptureSession.capture(captureBuilder.build(), mCaptureCallback, mBackgroundHandler);
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
+    }
+
+    private void setZoomRation(CaptureRequest.Builder captureBuilder) {
+        captureBuilder.set(CaptureRequest.SCALER_CROP_REGION, mCurrentRect);
     }
 
     /**
@@ -346,6 +359,13 @@ public class CamManager {
     };
 
     /**
+     * 获取当前 textureview 显示位图。此处用于获取切换镜头时的最后一帧。
+     */
+    public void getLastFrame(Bitmap bitmap) {
+        mBackgroundHandler.post(new SaveImage(bitmap, SaveImage.getImageName()));
+    }
+
+    /**
      * open camera with given id
      */
     public void openCamera(AutoFitTextureView textureView) {
@@ -392,6 +412,7 @@ public class CamManager {
     private void setUpCameraOutputs() {
         mSensorRect = mCameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
         mMaxZoom = mCameraCharacteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM);
+        mCurrentRect = cropRegionForZoom(defaultZoomRatio);
         setupTextureView();
     }
 
@@ -601,19 +622,19 @@ public class CamManager {
         @Override
         public void onCaptureSequenceAborted(@NonNull CameraCaptureSession session, int sequenceId) {
             super.onCaptureSequenceAborted(session, sequenceId);
-            Log.d(TAG,"onCaptureSequenceAborted" );
+            Log.d(TAG, "onCaptureSequenceAborted");
         }
 
         @Override
         public void onCaptureBufferLost(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull Surface target, long frameNumber) {
             super.onCaptureBufferLost(session, request, target, frameNumber);
-            Log.d(TAG,"onCaptureBufferLost" );
+            Log.d(TAG, "onCaptureBufferLost");
         }
 
         @Override
         public void onCaptureSequenceCompleted(@NonNull CameraCaptureSession session, int sequenceId, long frameNumber) {
             super.onCaptureSequenceCompleted(session, sequenceId, frameNumber);
-            Log.d(TAG,"onCaptureSequenceCompleted" );
+            Log.d(TAG, "onCaptureSequenceCompleted");
         }
 
         @Override
@@ -641,11 +662,15 @@ public class CamManager {
         return new Rect(xCenter - xDelta, yCenter - yDelta, xCenter + xDelta, yCenter + yDelta);
     }
 
+    /**
+     * 控制缩放逻辑,根据UI进度实时zoom
+     * */
     public void setZoomRatio(float zoomRatio) {
         Log.d(TAG, mCameraId + " zoomRatio:" + zoomRatio);
         if (!mCameraId.equals(mWideCameraId) && zoomRatio >= 1.0f) {
             //非广角镜头的zoom
-            mPreviewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, cropRegionForZoom(zoomRatio));
+            mCurrentRect = cropRegionForZoom(zoomRatio);
+            mPreviewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, mCurrentRect);
             setRepeatingPreview();
         } else if (!mCameraId.equals(mWideCameraId) && zoomRatio < 1.0f) {
             //非广角镜头zoom到1.0以下，应切换到广角。并在启动广角时，设置zoom=1+zoomdiff
@@ -658,7 +683,8 @@ public class CamManager {
                 @Override
                 public void cameraDeviceOnConfigured(CaptureRequest.Builder builder) {
                     Log.d(TAG, "builder.set zoomDiff");
-                    builder.set(CaptureRequest.SCALER_CROP_REGION, cropRegionForZoom(1 + zoomDiff));
+                    mCurrentRect = cropRegionForZoom(1 + zoomDiff);
+                    builder.set(CaptureRequest.SCALER_CROP_REGION, mCurrentRect);
                 }
             });
         } else if (mCameraId.equals(mWideCameraId) && zoomRatio >= 1.0f) {
@@ -667,9 +693,48 @@ public class CamManager {
         } else if (mCameraId.equals(mWideCameraId) && zoomRatio < 1.0f) {
             //广角镜头下zoom,广角镜头zoom范围也是 1.0~max,zoomRatio需要换算
             zoomRatio += zoomDiff;
-            mPreviewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, cropRegionForZoom(zoomRatio));
+            mCurrentRect = cropRegionForZoom(zoomRatio);
+            mPreviewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, mCurrentRect);
             setRepeatingPreview();
         }
+    }
+
+    /**
+     * 仿LG的平滑控制
+     * */
+    public void setZoomRatio2(float zoomRatio){
+        mCurrentZoom = zoomRatio;
+        if (!mCameraId.equals(mWideCameraId) && zoomRatio >= 1.0f) {
+            //非广角镜头的zoom
+            mCurrentRect = cropRegionForZoom(zoomRatio);
+            mPreviewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, mCurrentRect);
+            setRepeatingPreview();
+        } else if (!mCameraId.equals(mWideCameraId) && zoomRatio < 1.0f) {
+            //非广角镜头zoom到1.0以下，应切换到广角。并在启动广角时，设置zoom=1+zoomdiff
+            switchCamera(mWideCameraId, new CameraInfoCallback() {
+                @Override
+                public void cameraFacing(int facing) {
+
+                }
+
+                @Override
+                public void cameraDeviceOnConfigured(CaptureRequest.Builder builder) {
+                    Log.d(TAG, "builder.set zoomDiff");
+                    mCurrentRect = cropRegionForZoom(1 + zoomDiff);
+                    builder.set(CaptureRequest.SCALER_CROP_REGION, mCurrentRect);
+                }
+            });
+        } else if (mCameraId.equals(mWideCameraId) && zoomRatio >= 1.0f) {
+            //广角镜头zoom到1X以上，广角镜头切到主摄
+            switchCamera(mDefaultCameraId, null);
+        } else if (mCameraId.equals(mWideCameraId) && zoomRatio < 1.0f) {
+            //广角镜头下zoom,广角镜头zoom范围也是 1.0~max,zoomRatio需要换算
+            zoomRatio += zoomDiff;
+            mCurrentRect = cropRegionForZoom(zoomRatio);
+            mPreviewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, mCurrentRect);
+            setRepeatingPreview();
+        }
+
     }
 
     public void switchCamera(String cameraId, @Nullable CameraInfoCallback cameraInfoCallback) {

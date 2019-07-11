@@ -1,5 +1,6 @@
 package com.fitz.fitzcamera;
 
+import android.graphics.Bitmap;
 import android.media.Image;
 import android.net.Uri;
 import android.os.Environment;
@@ -7,6 +8,7 @@ import android.text.format.Time;
 import android.util.Log;
 import android.widget.Toast;
 
+import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -27,6 +29,7 @@ public class SaveImage implements Runnable {
 
     private Image mImage;
     private String mImageName;
+    private Bitmap mBitmap;
 
     private static File imageDir = Environment.getExternalStoragePublicDirectory(DIRECTORY_DCIM);
 
@@ -34,6 +37,12 @@ public class SaveImage implements Runnable {
     SaveImage(Image image, String imageName) {
         Log.d(TAG, "SaveImage: " + imageName);
         mImage = image;
+        mImageName = imageName;
+    }
+
+    SaveImage(Bitmap bitmap, String imageName) {
+        Log.d(TAG, "SaveBitmap: " + imageName);
+        mBitmap = bitmap;
         mImageName = imageName;
     }
 
@@ -72,35 +81,50 @@ public class SaveImage implements Runnable {
      * The general contract of the method <code>run</code> is that it may
      * take any action whatsoever.
      *
-     * @see Thread#run()
      */
     @Override
     public void run() {
-        ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
-        byte[] bytes = new byte[buffer.remaining()];
-        buffer.get(bytes);
+        if(mImage != null){
+            ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.get(bytes);
 
-        // 首先判断文件夹是否存在
-        if (!imageDir.exists()) {
-            Log.e(TAG, "文件夹不存在!!?");
-        } else {
+            // 首先判断文件夹是否存在
+            if (!imageDir.exists()) {
+                Log.e(TAG, "文件夹不存在!!?");
+            } else {
+                File finalImage = new File(imageDir, mImageName);
+
+                Uri fileImageFilePath = Uri.fromFile(finalImage);
+                try {
+                    // 实例化对象：文件输出流
+                    FileOutputStream mFileOutputStream = new FileOutputStream(finalImage);
+                    // 写入文件
+                    mFileOutputStream.write(bytes);
+                    // 清空输出流缓存
+                    mFileOutputStream.flush();
+                    // 关闭输出流
+                    mFileOutputStream.close();
+                } catch (FileNotFoundException e) {
+                    e.printStackTrace();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }else if(mBitmap != null){
             File finalImage = new File(imageDir, mImageName);
-
-            Uri fileImageFilePath = Uri.fromFile(finalImage);
+            BufferedOutputStream bos = null;
             try {
-                // 实例化对象：文件输出流
-                FileOutputStream mFileOutputStream = new FileOutputStream(finalImage);
-                // 写入文件
-                mFileOutputStream.write(bytes);
-                // 清空输出流缓存
-                mFileOutputStream.flush();
-                // 关闭输出流
-                mFileOutputStream.close();
+                bos = new BufferedOutputStream(new FileOutputStream(finalImage));
+                mBitmap.compress(Bitmap.CompressFormat.JPEG, 100, bos);
+                bos.flush();
+                bos.close();
             } catch (FileNotFoundException e) {
                 e.printStackTrace();
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
+
     }
 }

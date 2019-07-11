@@ -72,8 +72,9 @@ public class CommonCap extends Fragment {
                 case R.id.button_shutter:
                     Log.d(TAG, "点击拍照");
                     //mCamManager.onPause();
-                    //String imageUri = mCamManager.takeShot();
-                    //Toast.makeText(CommonCap.this.getActivity(), imageUri, Toast.LENGTH_SHORT).show();
+                    String imageUri = mCamManager.takeShot();
+                    Toast.makeText(CommonCap.this.getActivity(), imageUri, Toast.LENGTH_SHORT).show();
+                    //mCamManager.getLastFrame(mTextureView.getBitmap());
                     break;
                 case R.id.button_switchCamera:
                     initListPopupIfNeed();
@@ -93,7 +94,9 @@ public class CommonCap extends Fragment {
             Log.d(TAG, "progress:" + progress);
             float zoomRatio = (float) progress / 100;
             setZoomRatioText(zoomRatio);
-            mCamManager.setZoomRatio(zoomRatio);
+
+            //mCamManager.setZoomRatio(zoomRatio);
+            mCamManager.setZoomRatio2(zoomRatio);
         }
 
         @Override
