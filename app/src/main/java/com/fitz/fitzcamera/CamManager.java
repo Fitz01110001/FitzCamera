@@ -21,6 +21,7 @@ import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.ImageReader;
+import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
@@ -103,35 +104,35 @@ public class CamManager {
      */
     private String mDefaultCameraId = "0";
 
-    private final String deviceBrandLG = "LG";
+    private final String deviceModeLG = "LM-X625N";
 
-    private final String deviceBrandHW = "HW";
+    private final String deviceModeHW = "LYA-AL00";
 
-    private String currentDeviceBrand = deviceBrandLG;
+    private String currentDeviceMode = deviceModeLG;
 
     private final HashMap<String, String> deviceWideCameraIdMap = new HashMap<String, String>() {
         {
-            put(deviceBrandLG, "2");
-            put(deviceBrandHW, "3");
+            put(deviceModeLG, "2");
+            put(deviceModeHW, "3");
         }
     };
 
     private final HashMap<String, Float> deviceWideCameraZoomDiff = new HashMap<String, Float>() {
         {
-            put(deviceBrandLG, 0.4f);
-            put(deviceBrandHW, 0.8f);
+            put(deviceModeLG, 0.4f);
+            put(deviceModeHW, 0.8f);
         }
     };
 
     /**
      * 广角镜头id，LG：2 HW：3
      */
-    private final String mWideCameraId = deviceWideCameraIdMap.get(currentDeviceBrand);
+    private final String mWideCameraId = deviceWideCameraIdMap.get(currentDeviceMode);
 
     /**
      * 广角和主摄之间的zoom差值
      */
-    private final Float zoomDiff = deviceWideCameraZoomDiff.get(currentDeviceBrand);
+    private final Float zoomDiff = deviceWideCameraZoomDiff.get(currentDeviceMode);
 
     private Activity mContext;
 
@@ -210,7 +211,6 @@ public class CamManager {
     private void requestCameraPermission() {
         ActivityCompat.requestPermissions(mContext, new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1);
     }
-
 
     /**
      * 获取 cameraID 对应支持的分辨率
@@ -665,7 +665,7 @@ public class CamManager {
     /**
      * 控制缩放逻辑,根据UI进度实时zoom
      * */
-    public void setZoomRatio(float zoomRatio) {
+    public void setZoomRatioInLG(float zoomRatio) {
         Log.d(TAG, mCameraId + " zoomRatio:" + zoomRatio);
         if (!mCameraId.equals(mWideCameraId) && zoomRatio >= 1.0f) {
             //非广角镜头的zoom
@@ -699,42 +699,22 @@ public class CamManager {
         }
     }
 
+    public void setZoomRatioInHW(float zoomRatio) {
+        Log.d(TAG, mCameraId + " zoomRatio:" + zoomRatio);
+        mCurrentRect = cropRegionForZoom(zoomRatio);
+        mPreviewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, mCurrentRect);
+        setRepeatingPreview();
+    }
+
     /**
      * 仿LG的平滑控制
      * */
-    public void setZoomRatio2(float zoomRatio){
-        mCurrentZoom = zoomRatio;
-        if (!mCameraId.equals(mWideCameraId) && zoomRatio >= 1.0f) {
-            //非广角镜头的zoom
-            mCurrentRect = cropRegionForZoom(zoomRatio);
-            mPreviewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, mCurrentRect);
-            setRepeatingPreview();
-        } else if (!mCameraId.equals(mWideCameraId) && zoomRatio < 1.0f) {
-            //非广角镜头zoom到1.0以下，应切换到广角。并在启动广角时，设置zoom=1+zoomdiff
-            switchCamera(mWideCameraId, new CameraInfoCallback() {
-                @Override
-                public void cameraFacing(int facing) {
-
-                }
-
-                @Override
-                public void cameraDeviceOnConfigured(CaptureRequest.Builder builder) {
-                    Log.d(TAG, "builder.set zoomDiff");
-                    mCurrentRect = cropRegionForZoom(1 + zoomDiff);
-                    builder.set(CaptureRequest.SCALER_CROP_REGION, mCurrentRect);
-                }
-            });
-        } else if (mCameraId.equals(mWideCameraId) && zoomRatio >= 1.0f) {
-            //广角镜头zoom到1X以上，广角镜头切到主摄
-            switchCamera(mDefaultCameraId, null);
-        } else if (mCameraId.equals(mWideCameraId) && zoomRatio < 1.0f) {
-            //广角镜头下zoom,广角镜头zoom范围也是 1.0~max,zoomRatio需要换算
-            zoomRatio += zoomDiff;
-            mCurrentRect = cropRegionForZoom(zoomRatio);
-            mPreviewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, mCurrentRect);
-            setRepeatingPreview();
+    public void zoom(float zoomRatio){
+        if(currentDeviceMode.equals(deviceModeLG)){
+            setZoomRatioInLG(zoomRatio);
+        }else if(currentDeviceMode.equals(deviceModeHW)){
+            setZoomRatioInHW(zoomRatio);
         }
-
     }
 
     public void switchCamera(String cameraId, @Nullable CameraInfoCallback cameraInfoCallback) {
@@ -752,5 +732,11 @@ public class CamManager {
         void cameraDeviceOnConfigured(CaptureRequest.Builder builder);
     }
 
-
+    public void getDeviceInfo(){
+        String str1 = Build.MODEL;
+        String str2 = android.os.Build.BRAND;
+        currentDeviceMode = str1;
+        Log.d(TAG,"MODEL:"+str1);
+        Log.d(TAG,"BRAND:"+str2);
+    }
 }
