@@ -1,27 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FFFFFF"
-    tools:context=".fragments.CommonCap">
-
-    <com.fitz.fitzcamera.ui.AutoFitTextureView
-        android:id="@+id/texture_commoncap"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentStart="true"
-        android:layout_alignParentTop="true" />
-
+    android:gravity="bottom"
+    android:orientation="vertical"
+    tools:context=".MainActivity">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/camera_control"
         android:layout_width="match_parent"
         android:layout_height="150dp"
-        android:layout_alignParentBottom="true"
+        android:layout_alignParentBottom="false"
+        android:layout_gravity="bottom"
         android:alpha="80"
-        android:background="@color/qmui_config_color_black">
+        android:background="@android:color/background_dark">
 
         <include
             layout="@layout/zoombar_horizontal"
@@ -35,6 +30,17 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="@+id/button_shutter"
             android:visibility="gone"/>
+
+        <TextView
+            android:id="@+id/tv_zoomLevel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.AppCompat.Large"
+            android:textColor="@android:color/background_light"
+            app:layout_constraintBottom_toTopOf="@+id/button_shutter"
+            app:layout_constraintEnd_toEndOf="@+id/button_shutter"
+            app:layout_constraintStart_toStartOf="@+id/button_shutter"
+            app:layout_constraintTop_toTopOf="parent" />
 
         <ImageButton
             android:id="@+id/button_shutter"
@@ -59,19 +65,12 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
-        <TextView
-            android:id="@+id/tv_zoomLevel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:textAppearance="@style/TextAppearance.AppCompat.Large"
-            android:textColor="@color/qmui_config_color_white"
-            app:layout_constraintBottom_toTopOf="@+id/button_shutter"
-            app:layout_constraintEnd_toEndOf="@+id/button_shutter"
-            app:layout_constraintStart_toStartOf="@+id/button_shutter"
-            app:layout_constraintTop_toTopOf="parent" />
+
 
     </androidx.constraintlayout.widget.ConstraintLayout>
+</LinearLayout>
 
 
-</RelativeLayout>
+
+
+

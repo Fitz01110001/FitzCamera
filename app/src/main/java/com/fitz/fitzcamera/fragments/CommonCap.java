@@ -17,8 +17,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
-import android.widget.Button;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
 import android.widget.PopupWindow;
 import android.widget.SeekBar;
 import android.widget.SeekBar.OnSeekBarChangeListener;
@@ -28,6 +28,8 @@ import android.widget.Toast;
 import com.fitz.fitzcamera.CamManager;
 import com.fitz.fitzcamera.R;
 import com.fitz.fitzcamera.ui.AutoFitTextureView;
+import com.fitz.fitzcamera.ui.ShutterTouchListener;
+import com.fitz.fitzcamera.ui.TextureViewTouchListener;
 import com.qmuiteam.qmui.util.QMUIDisplayHelper;
 import com.qmuiteam.qmui.widget.popup.QMUIListPopup;
 import com.qmuiteam.qmui.widget.popup.QMUIPopup;
@@ -53,16 +55,18 @@ public class CommonCap extends Fragment {
 
     private ImageButton switchCamera;
 
+    private LinearLayout zoombar;
+
     /**
      * 预览显示view
      */
     private AutoFitTextureView mTextureView;
 
-    private SeekBar mSeekBar;
 
     private TextView mZoomLevel;
 
     private QMUIListPopup mListPopup;
+
 
 
     private View.OnClickListener mButtonOnClickListener = new View.OnClickListener() {
@@ -87,122 +91,6 @@ public class CommonCap extends Fragment {
             }
         }
     };
-
-    private SeekBar.OnSeekBarChangeListener mOnSeekBarChangeListener = new OnSeekBarChangeListener() {
-        @Override
-        public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-            Log.d(TAG, "progress:" + progress);
-            float zoomRatio = (float) progress / 100;
-            setZoomRatioText(zoomRatio);
-
-            //mCamManager.setZoomRatio(zoomRatio);
-            mCamManager.setZoomRatio2(zoomRatio);
-        }
-
-        @Override
-        public void onStartTrackingTouch(SeekBar seekBar) {
-
-        }
-
-        @Override
-        public void onStopTrackingTouch(SeekBar seekBar) {
-
-        }
-    };
-
-    /**
-     * 設置camera切換 popupmenu
-     */
-    private void initListPopupIfNeed() {
-        if (mListPopup == null) {
-            String[] listItems = mCamManager.getCameraIDList() != null ? mCamManager.getCameraIDList() : new String[]{
-                    "0",
-                    "1",
-            };
-            List<String> data = new ArrayList<>();
-
-            Collections.addAll(data, listItems);
-
-            ArrayAdapter adapter = new ArrayAdapter<>(getActivity(), R.layout.simple_list_item, data);
-
-            mListPopup = new QMUIListPopup(getContext(), QMUIPopup.DIRECTION_NONE, adapter);
-            mListPopup.create(QMUIDisplayHelper.dp2px(getContext(), 50), QMUIDisplayHelper.dp2px(getContext(), 200), new AdapterView.OnItemClickListener() {
-                @Override
-                public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
-                    Toast.makeText(getActivity(), "camera " + i, Toast.LENGTH_SHORT).show();
-                    mCamManager.switchCamera(String.valueOf(i), new CamManager.CameraInfoCallback() {
-                        @Override
-                        public void cameraFacing(int facing) {
-                            mSeekBar.setVisibility(facing == CameraCharacteristics.LENS_FACING_FRONT ? View.INVISIBLE : View.VISIBLE);
-                        }
-                        @Override
-                        public void cameraDeviceOnConfigured(CaptureRequest.Builder builder) { }
-                    });
-                    mListPopup.dismiss();
-                }
-            });
-            mListPopup.setOnDismissListener(new PopupWindow.OnDismissListener() {
-                @Override
-                public void onDismiss() {
-                }
-            });
-        }
-    }
-
-    public static CommonCap newInstance() {
-        CommonCap fragment = new CommonCap();
-        return fragment;
-    }
-
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        getActivity().getWindow().setFormat(PixelFormat.TRANSLUCENT);
-        mCamManager = new CamManager(this, this.getActivity());
-        mCamManager.checkCameraPermission();
-    }
-
-    @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        // Inflate the layout for this fragment
-        return inflater.inflate(R.layout.fragment_common_cap, container, false);
-    }
-
-    @Override
-    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        super.onViewCreated(view, savedInstanceState);
-        shutter = view.findViewById(R.id.button_shutter);
-        shutter.setOnClickListener(mButtonOnClickListener);
-        switchCamera = view.findViewById(R.id.button_switchCamera);
-        switchCamera.setOnClickListener(mButtonOnClickListener);
-        mTextureView = view.findViewById(R.id.texture_commoncap);
-        mSeekBar = view.findViewById(R.id.zoombar);
-        mZoomLevel = view.findViewById(R.id.tv_zoomLevel);
-        mSeekBar.setOnSeekBarChangeListener(mOnSeekBarChangeListener);
-    }
-
-    private void setZoomRatioText(float zoomzoomRatio) {
-        DecimalFormat df = new DecimalFormat("0.000");
-        df.setRoundingMode(RoundingMode.HALF_UP);
-        mZoomLevel.setText(df.format(zoomzoomRatio) + "x");
-    }
-
-    @Override
-    public void onActivityCreated(Bundle savedInstanceState) {
-        super.onActivityCreated(savedInstanceState);
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-        mSeekBar.setProgress(defaultProgress);
-        setZoomRatioText((int)defaultProgress/100);
-        if (mTextureView.isAvailable()) {
-            mCamManager.openCamera(mTextureView);
-        } else {
-            mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
-        }
-    }
 
     /**
      * {@link TextureView.SurfaceTextureListener} handles several lifecycle events on a
@@ -233,6 +121,137 @@ public class CommonCap extends Fragment {
         }
 
     };
+
+
+
+/*    private SeekBar.OnSeekBarChangeListener mOnSeekBarChangeListener = new OnSeekBarChangeListener() {
+        @Override
+        public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+            Log.d(TAG, "progress:" + progress);
+            float zoomRatio = (float) progress / 100;
+            setZoomRatioText(zoomRatio);
+
+            //mCamManager.setZoomRatio(zoomRatio);
+            mCamManager.zoom(zoomRatio);
+        }
+
+    };*/
+
+    /**
+     * 設置camera切換 popupmenu
+     */
+    private void initListPopupIfNeed() {
+        if (mListPopup == null) {
+            String[] listItems = mCamManager.getCameraIDList() != null ? mCamManager.getCameraIDList() : new String[]{
+                    "0",
+                    "1",
+            };
+            List<String> data = new ArrayList<>();
+
+            Collections.addAll(data, listItems);
+
+            ArrayAdapter adapter = new ArrayAdapter<>(getActivity(), R.layout.simple_list_item, data);
+
+            mListPopup = new QMUIListPopup(getContext(), QMUIPopup.DIRECTION_NONE, adapter);
+            mListPopup.create(QMUIDisplayHelper.dp2px(getContext(), 50), QMUIDisplayHelper.dp2px(getContext(), 200), new AdapterView.OnItemClickListener() {
+                @Override
+                public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
+                    Toast.makeText(getActivity(), "camera " + i, Toast.LENGTH_SHORT).show();
+                    mCamManager.switchCamera(String.valueOf(i), new CamManager.CameraInfoCallback() {
+                        @Override
+                        public void cameraFacing(int facing) {
+                        }
+                        @Override
+                        public void cameraDeviceOnConfigured(CaptureRequest.Builder builder) { }
+                    });
+                    mListPopup.dismiss();
+                }
+            });
+            mListPopup.setOnDismissListener(new PopupWindow.OnDismissListener() {
+                @Override
+                public void onDismiss() {
+                }
+            });
+        }
+    }
+
+    public static CommonCap newInstance() {
+        CommonCap fragment = new CommonCap();
+        return fragment;
+    }
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        getActivity().getWindow().setFormat(PixelFormat.TRANSLUCENT);
+        mCamManager = new CamManager(this, this.getActivity());
+        mCamManager.checkCameraPermission();
+        mCamManager.getDeviceInfo();
+    }
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        // Inflate the layout for this fragment
+        return inflater.inflate(R.layout.fragment_common_cap, container, false);
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        shutter = view.findViewById(R.id.button_shutter);
+        shutter.setOnClickListener(mButtonOnClickListener);
+        zoombar = view.findViewById(R.id.zoombar_horizontal);
+        switchCamera = view.findViewById(R.id.button_switchCamera);
+        switchCamera.setOnClickListener(mButtonOnClickListener);
+        shutter.setOnTouchListener(new ShutterTouchListener(this.getActivity(), new ShutterTouchListener.TouchCallBack() {
+            @Override
+            public void onTouchMove() {
+                switchCamera.setVisibility(View.GONE);
+                zoombar.setVisibility(View.VISIBLE);
+            }
+
+            @Override
+            public void onTouchUP() {
+                switchCamera.setVisibility(View.VISIBLE);
+                zoombar.setVisibility(View.GONE);
+            }
+        }));
+        mTextureView = view.findViewById(R.id.texture_commoncap);
+        mTextureView.setOnTouchListener(new TextureViewTouchListener(mCamManager));
+        mZoomLevel = view.findViewById(R.id.tv_zoomLevel);
+    }
+
+    //更新 zoom 显示
+    public void updateZoomRatio(float zoomzoomRatio){
+        setZoomRatioText(zoomzoomRatio);
+    }
+
+
+    private void setZoomRatioText(float zoomzoomRatio) {
+        if(zoomzoomRatio < 1f){
+            mZoomLevel.setText("WIDE");
+        }else {
+            DecimalFormat df = new DecimalFormat("0.0");
+            df.setRoundingMode(RoundingMode.HALF_UP);
+            mZoomLevel.setText(df.format(zoomzoomRatio) + "x");
+        }
+    }
+
+    @Override
+    public void onActivityCreated(Bundle savedInstanceState) {
+        super.onActivityCreated(savedInstanceState);
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        setZoomRatioText((int)defaultProgress/100);
+        if (mTextureView.isAvailable()) {
+            mCamManager.openCamera(mTextureView);
+        } else {
+            mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
+        }
+    }
 
     @Override
     public void onPause() {
