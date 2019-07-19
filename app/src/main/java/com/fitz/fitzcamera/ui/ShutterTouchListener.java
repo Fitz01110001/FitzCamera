@@ -2,10 +2,13 @@ package com.fitz.fitzcamera.ui;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.print.PrinterId;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
+
+import com.fitz.fitzcamera.CamManager;
 
 @SuppressLint("AppCompatCustomView")
 public class ShutterTouchListener implements View.OnTouchListener {
@@ -13,11 +16,10 @@ public class ShutterTouchListener implements View.OnTouchListener {
     private String TAG = "ShutterTouchListener";
     private TouchCallBack mTouchCallBack;
     private int lastX;
-    private int lastY;
+    private int downX;
     private Context mContext;
     private int screenWidth;
     private int screenHeight;
-    private int arrowWidth = 20;
 
 
     public ShutterTouchListener(Context context, TouchCallBack callBack) {
@@ -25,7 +27,6 @@ public class ShutterTouchListener implements View.OnTouchListener {
         mContext = context;
         DisplayMetrics dm = mContext.getResources().getDisplayMetrics();
         screenWidth = dm.widthPixels;
-        //int screenHeight = dm.heightPixels - 100;//需要减掉图片的高度
         screenHeight = dm.heightPixels;//需要减掉图片的高度
         Log.d(TAG, "screenWidth:" + screenWidth + " screenHeight:" + screenHeight);
     }
@@ -45,18 +46,15 @@ public class ShutterTouchListener implements View.OnTouchListener {
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
                 lastX = (int) event.getRawX();//获取触摸事件触摸位置的原始X坐标
-                lastY = (int) event.getRawY();
-                Log.d(TAG, "ACTION_DOWN,X:" + lastX + " Y:" + lastY);
+                downX = lastX;
+                Log.d(TAG, "ACTION_DOWN,X:" + lastX);
                 break;
             case MotionEvent.ACTION_UP:
                 Log.d(TAG, "ACTION_UP");
                 mTouchCallBack.onTouchUP();
                 break;
             case MotionEvent.ACTION_MOVE:
-                mTouchCallBack.onTouchMove();
-                //event.getRawX();获得移动的位置
                 int dx = (int) event.getRawX() - lastX;
-                int dy = (int) event.getRawY() - lastY;
                 int l = v.getLeft() + dx;
                 int b = v.getBottom();
                 int r = v.getRight() + dx;
@@ -67,28 +65,26 @@ public class ShutterTouchListener implements View.OnTouchListener {
                     r = l + v.getWidth();
                 }
                 if (r > screenWidth) {
-                    r = screenWidth ;
+                    r = screenWidth;
                     l = r - v.getWidth();
                 }
 
                 v.layout(l, t, r, b);
-                Log.d(TAG, "ACTION_MOVE,dx:" + dx);
-                lastX = (int) event.getRawX();
-                lastY = (int) event.getRawY();
                 v.postInvalidate();
+                lastX = (int) event.getRawX();
+                int diffX = lastX - downX;
+                Log.d(TAG, "ACTION_MOVE,dx:" + dx + " diffX:" + diffX);
+                mTouchCallBack.onTouchMove(dx, diffX);
                 break;
         }
         return true;
     }
 
     public interface TouchCallBack {
-        void onTouchMove();
+        void onTouchMove(int dx, int diffX);
 
         void onTouchUP();
     }
 
-    private void moveView(View v) {
-
-    }
 
 }

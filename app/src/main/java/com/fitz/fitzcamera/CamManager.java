@@ -22,8 +22,10 @@ import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.ImageReader;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.Message;
 import android.util.Log;
 import android.util.Size;
 import android.util.SparseIntArray;
@@ -51,6 +53,16 @@ public class CamManager {
      * Conversion from screen rotation to JPEG orientation.
      */
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
+
+    /**
+     * Max preview width that is guaranteed by Camera2 API
+     */
+    private static final int MAX_PREVIEW_WIDTH = 1920;
+
+    /**
+     * Max preview height that is guaranteed by Camera2 API
+     */
+    private static final int MAX_PREVIEW_HEIGHT = 1080;
 
     static {
         ORIENTATIONS.append(Surface.ROTATION_0, 90);
@@ -164,16 +176,6 @@ public class CamManager {
     private CameraCaptureSession mCameraCaptureSession;
 
     /**
-     * Max preview width that is guaranteed by Camera2 API
-     */
-    private static final int MAX_PREVIEW_WIDTH = 1920;
-
-    /**
-     * Max preview height that is guaranteed by Camera2 API
-     */
-    private static final int MAX_PREVIEW_HEIGHT = 1080;
-
-    /**
      * The {@link android.util.Size} of camera preview.
      */
     private Size mPreviewSize;
@@ -186,9 +188,11 @@ public class CamManager {
     /**
      * 默认4:3比例
      */
-    private static Size mDefaultSize;
+    private Size mDefaultSize;
 
     private AutoFitTextureView mTextureView;
+
+
 
     public CamManager(CommonCap fg, Activity context) {
         mCommonCap = fg;
@@ -218,7 +222,7 @@ public class CamManager {
     }
 
     /**
-     * 获取 cameraID 对应支持的分辨率
+     * 获取 cameraID 对应支持的分辨率,保留代码
      */
     private void getCamInfo() {
         CameraCharacteristics cameraCharacteristics = null;
@@ -258,7 +262,7 @@ public class CamManager {
      * Closes the current {@link CameraDevice}.
      */
     private void closeCamera() {
-        synchronized (mCameraDevice){
+        synchronized (mCameraDevice) {
             if (null != mCameraCaptureSession) {
                 try {
                     mCameraCaptureSession.stopRepeating();
@@ -281,7 +285,7 @@ public class CamManager {
 
     public void onPause() {
         closeCamera();
-        //stopBackgroundThread();
+        stopBackgroundThread();
     }
 
     public String takeShot() {
@@ -366,6 +370,7 @@ public class CamManager {
     };
 
     /**
+     * 暂时不需要，关闭cameradevice后，textureview会停留在最后一帧，无需手动操作，保留代码.
      * 获取当前 textureview 显示位图。此处用于获取切换镜头时的最后一帧。
      */
     public void getLastFrame(Bitmap bitmap) {
@@ -373,7 +378,7 @@ public class CamManager {
     }
 
     /**
-     * open camera with given id
+     * opencamera with given id,供外部使用
      */
     public void openCamera(AutoFitTextureView textureView) {
         mTextureView = textureView;
@@ -392,9 +397,11 @@ public class CamManager {
         }
     }
 
+    /**
+     * 内部使用的opencamera
+     * */
     private void openCamera(String cameraId) {
         mCameraId = cameraId;
-
         try {
             mCameraCharacteristics = mCameraManager.getCameraCharacteristics(mCameraId);
             if (mCameraInfoCallback != null) {
@@ -499,6 +506,9 @@ public class CamManager {
         //Log.d(TAG, "mW: " + mPreviewSize.getWidth() + " mH: " + mPreviewSize.getHeight());
     }
 
+    /**
+     * 计算预览view尺寸
+     * */
     private Size calPreviewSize(int maxPreviewWidth, int maxPreviewHeight, int rotatedPreviewWidth, int rotatedPreviewHeight) {
         //Log.d(TAG, maxPreviewWidth + " " + maxPreviewHeight + " " + rotatedPreviewWidth + " " + rotatedPreviewHeight);
         if (rotatedPreviewWidth >= maxPreviewWidth || rotatedPreviewHeight >= maxPreviewHeight) {
@@ -524,14 +534,14 @@ public class CamManager {
 
         @Override
         public void onOpened(@NonNull CameraDevice camera) {
-            Log.d(StateCallbackTAG, "onOpened "+ camera.getId());
+            Log.d(StateCallbackTAG, "onOpened " + camera.getId());
             mCameraDevice = camera;
             createCameraPreviewSession();
         }
 
         @Override
         public void onDisconnected(@NonNull CameraDevice camera) {
-            Log.d(StateCallbackTAG, "onDisconnected "+ camera.getId());
+            Log.d(StateCallbackTAG, "onDisconnected " + camera.getId());
         }
 
         @Override
@@ -569,7 +579,7 @@ public class CamManager {
 
                 @Override
                 public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession) {
-                    synchronized(mCameraDevice){
+                    synchronized (mCameraDevice) {
                         Log.d(TAG, "onConfigured");
                         // The camera is already closed
                         if (null == mCameraDevice) {
@@ -685,7 +695,7 @@ public class CamManager {
     }
 
     /**
-     * 控制缩放逻辑,根据UI进度实时zoom
+     * LG 1885的zoom实现(手动切换镜头)
      */
     public void setZoomRatioInLG(float zoomRatio) {
         Log.d(TAG, "setZoomRatioInLG:" + mCameraId + " zoomRatio:" + zoomRatio);
@@ -721,6 +731,9 @@ public class CamManager {
         }
     }
 
+    /**
+     * Mate20 pro的zoom实现,直接传值即可(0.6~10)
+     */
     public void setZoomRatioInHW(float zoomRatio) {
         Log.d(TAG, mCameraId + " zoomRatio:" + zoomRatio);
         mCurrentRect = cropRegionForZoom(zoomRatio);
@@ -728,19 +741,24 @@ public class CamManager {
         setRepeatingPreview();
     }
 
-
-    public void zoomIn() {
+    /**
+     * 放大，对数值做判断处理
+     * */
+    public void zoomIn(float dZoom) {
         Log.d(TAG, "zoomIn");
-        mCurrentZoom = mCurrentZoom + 0.05f;
+        mCurrentZoom = mCurrentZoom + dZoom;
         if (mCurrentZoom >= mMaxZoom) {
             mCurrentZoom = mMaxZoom;
         }
         zoom(mCurrentZoom);
     }
 
-    public void zoomOut() {
+    /**
+     * 缩小，对数值做判断处理
+     * */
+    public void zoomOut(float dZoom) {
         Log.d(TAG, "zoomOut");
-        mCurrentZoom = mCurrentZoom - 0.05f;
+        mCurrentZoom = mCurrentZoom - dZoom;
         if (mCurrentZoom <= mMinZoom) {
             mCurrentZoom = mMinZoom;
         }
@@ -748,9 +766,10 @@ public class CamManager {
     }
 
     /**
-     * 仿LG的平滑控制
+     * 区分设备实现zoom，更新zoom数值
      */
-    public void zoom(float zoomRatio) {
+    private void zoom(float zoomRatio) {
+        Log.d(TAG, "zoom,zoomRatio:" + zoomRatio);
         mCommonCap.updateZoomRatio(zoomRatio);
         if (currentDeviceMode.equals(deviceModeLG)) {
             setZoomRatioInLG(zoomRatio);
@@ -759,6 +778,9 @@ public class CamManager {
         }
     }
 
+    /**
+     * 切换镜头
+     * */
     public void switchCamera(String cameraId, @Nullable CameraInfoCallback cameraInfoCallback) {
         mCameraInfoCallback = cameraInfoCallback;
         closeCamera();
@@ -774,6 +796,9 @@ public class CamManager {
         void cameraDeviceOnConfigured(CaptureRequest.Builder builder);
     }
 
+    /**
+     * 获取设备信息
+     * */
     public void getDeviceInfo() {
         String str1 = Build.MODEL;
         String str2 = android.os.Build.BRAND;

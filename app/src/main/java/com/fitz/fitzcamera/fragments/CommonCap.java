@@ -2,7 +2,6 @@ package com.fitz.fitzcamera.fragments;
 
 import android.graphics.PixelFormat;
 import android.graphics.SurfaceTexture;
-import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CaptureRequest;
 import android.os.Bundle;
 
@@ -20,8 +19,6 @@ import android.widget.ArrayAdapter;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.PopupWindow;
-import android.widget.SeekBar;
-import android.widget.SeekBar.OnSeekBarChangeListener;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -46,15 +43,29 @@ public class CommonCap extends Fragment {
 
     private CamManager mCamManager;
 
-    private final int defaultProgress = 100;
+    /**
+     * 默认显示的zoom值，为1
+     * */
+    private final int defaultZoom = 100;
+
+    /**
+     * 通过快门键左右滑动zoom，步进值要小
+     * */
+    private final float dZoom = 0.02f;
 
     /**
      * 拍照用的 buttn
      */
     private ImageButton shutter;
 
+    /**
+     * 切换镜头
+     * */
     private ImageButton switchCamera;
 
+    /**
+     * 滑动快门键时显示的缩放条
+     * */
     private LinearLayout zoombar;
 
     /**
@@ -62,12 +73,15 @@ public class CommonCap extends Fragment {
      */
     private AutoFitTextureView mTextureView;
 
-
+    /**
+     * 显示当前zoom值
+     * */
     private TextView mZoomLevel;
 
+    /**
+     * 切换镜头时弹出的menu
+     * */
     private QMUIListPopup mListPopup;
-
-
 
     private View.OnClickListener mButtonOnClickListener = new View.OnClickListener() {
         @Override
@@ -100,13 +114,13 @@ public class CommonCap extends Fragment {
 
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture texture, int width, int height) {
-            Log.d(TAG,"onSurfaceTextureAvailable");
+            Log.d(TAG, "onSurfaceTextureAvailable");
             mCamManager.openCamera(mTextureView);
         }
 
         @Override
         public void onSurfaceTextureSizeChanged(SurfaceTexture texture, int width, int height) {
-            Log.d(TAG,"onSurfaceTextureSizeChanged");
+            Log.d(TAG, "onSurfaceTextureSizeChanged");
         }
 
         @Override
@@ -116,26 +130,11 @@ public class CommonCap extends Fragment {
 
         @Override
         public void onSurfaceTextureUpdated(SurfaceTexture texture) {
-            Log.d(TAG,"onSurfaceTextureUpdated");
+            Log.d(TAG, "onSurfaceTextureUpdated");
 
         }
 
     };
-
-
-
-/*    private SeekBar.OnSeekBarChangeListener mOnSeekBarChangeListener = new OnSeekBarChangeListener() {
-        @Override
-        public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-            Log.d(TAG, "progress:" + progress);
-            float zoomRatio = (float) progress / 100;
-            setZoomRatioText(zoomRatio);
-
-            //mCamManager.setZoomRatio(zoomRatio);
-            mCamManager.zoom(zoomRatio);
-        }
-
-    };*/
 
     /**
      * 設置camera切換 popupmenu
@@ -161,8 +160,10 @@ public class CommonCap extends Fragment {
                         @Override
                         public void cameraFacing(int facing) {
                         }
+
                         @Override
-                        public void cameraDeviceOnConfigured(CaptureRequest.Builder builder) { }
+                        public void cameraDeviceOnConfigured(CaptureRequest.Builder builder) {
+                        }
                     });
                     mListPopup.dismiss();
                 }
@@ -187,6 +188,7 @@ public class CommonCap extends Fragment {
         mCamManager = new CamManager(this, this.getActivity());
         mCamManager.checkCameraPermission();
         mCamManager.getDeviceInfo();
+
     }
 
     @Override
@@ -205,9 +207,14 @@ public class CommonCap extends Fragment {
         switchCamera.setOnClickListener(mButtonOnClickListener);
         shutter.setOnTouchListener(new ShutterTouchListener(this.getActivity(), new ShutterTouchListener.TouchCallBack() {
             @Override
-            public void onTouchMove() {
+            public void onTouchMove(int dx, int diffX) {
                 switchCamera.setVisibility(View.GONE);
                 zoombar.setVisibility(View.VISIBLE);
+                if (diffX > 0) {
+                    mCamManager.zoomIn(dZoom);
+                } else if (diffX < 0) {
+                    mCamManager.zoomOut(dZoom);
+                }
             }
 
             @Override
@@ -221,22 +228,6 @@ public class CommonCap extends Fragment {
         mZoomLevel = view.findViewById(R.id.tv_zoomLevel);
     }
 
-    //更新 zoom 显示
-    public void updateZoomRatio(float zoomzoomRatio){
-        setZoomRatioText(zoomzoomRatio);
-    }
-
-
-    private void setZoomRatioText(float zoomzoomRatio) {
-        if(zoomzoomRatio < 1f){
-            mZoomLevel.setText("WIDE");
-        }else {
-            DecimalFormat df = new DecimalFormat("0.0");
-            df.setRoundingMode(RoundingMode.HALF_UP);
-            mZoomLevel.setText(df.format(zoomzoomRatio) + "x");
-        }
-    }
-
     @Override
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
@@ -245,11 +236,32 @@ public class CommonCap extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        setZoomRatioText((int)defaultProgress/100);
+        setZoomRatioText((int) defaultZoom / 100);
         if (mTextureView.isAvailable()) {
             mCamManager.openCamera(mTextureView);
         } else {
             mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
+        }
+    }
+
+    /**
+     * 更新 zoom 显示
+     * */
+    public void updateZoomRatio(float zoomRatio) {
+        setZoomRatioText(zoomRatio);
+    }
+
+
+    /**
+     * 设置当前的zoom值，保留一位小数
+     * */
+    private void setZoomRatioText(float zoomRatio) {
+        if (zoomRatio < 1f) {
+            mZoomLevel.setText("WIDE");
+        } else {
+            DecimalFormat df = new DecimalFormat("0.0");
+            df.setRoundingMode(RoundingMode.HALF_UP);
+            mZoomLevel.setText(df.format(zoomRatio) + "x");
         }
     }
 
@@ -263,6 +275,7 @@ public class CommonCap extends Fragment {
     public void onStop() {
         super.onStop();
     }
+
 
 
 }

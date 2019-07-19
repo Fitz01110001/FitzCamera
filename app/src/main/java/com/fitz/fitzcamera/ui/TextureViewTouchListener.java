@@ -1,30 +1,25 @@
 package com.fitz.fitzcamera.ui;
 
-import android.graphics.Matrix;
-import android.graphics.PointF;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.TextureView;
 import android.view.View;
+
 import com.fitz.fitzcamera.CamManager;
 
 public class TextureViewTouchListener implements View.OnTouchListener {
 
     private String TAG = "TextureViewTouchListener";
-    private TextureView textureView;
+    protected TextureView textureView;
     private int mode;
 
     private float distance;
     private float preDistance;
-    private float lastDistance;
 
-    private PointF mid;
-    private Matrix matrix = new Matrix();
-    private Matrix savedMatrix = new Matrix();
-
-    private float defZoomLevel = 1f;
-    private float zoomLevel = 1f;
-    private float lastZoomLevel = 0f;
+    /**
+     * 通过双指缩放滑动zoom，步进值可以稍大
+     */
+    private final float dZoom = 0.05f;
 
     private CamManager mCamManager;
 
@@ -56,21 +51,16 @@ public class TextureViewTouchListener implements View.OnTouchListener {
                 Log.d(TAG, "ACTION_POINTER_DOWN," + "preDistance:" + preDistance);
                 //当两指间距大于10时，计算两指中心点
                 if (preDistance > 10f) {
-
                     mode = 2;
                 }
                 break;
             case MotionEvent.ACTION_UP:
                 Log.d(TAG, "ACTION_UP");
                 mode = 0;
-                zoomLevel = defZoomLevel;
-                lastZoomLevel = 0f;
                 break;
             case MotionEvent.ACTION_POINTER_UP:
                 Log.d(TAG, "ACTION_POINTER_UP");
                 mode = 0;
-                zoomLevel = defZoomLevel;
-                lastZoomLevel = 0f;
                 break;
             case MotionEvent.ACTION_MOVE:
                 //当两指缩放，计算缩放比例
@@ -80,9 +70,9 @@ public class TextureViewTouchListener implements View.OnTouchListener {
                     Log.d(TAG, "ACTION_MOVE," + " deltaDistance:" + deltaDistance);
                     if (deltaDistance > 1f) {
                         //两指间有滑动，需要zoom
-                        mCamManager.zoomIn();
-                    }else if(deltaDistance < -1f){
-                        mCamManager.zoomOut();
+                        mCamManager.zoomIn(dZoom);
+                    } else if (deltaDistance < -1f) {
+                        mCamManager.zoomOut(dZoom);
                     }
                     preDistance = distance;
                 }
@@ -90,7 +80,6 @@ public class TextureViewTouchListener implements View.OnTouchListener {
         }
         //进行缩放
         Log.d(TAG, "do zoom");
-
         return true;
     }
 
