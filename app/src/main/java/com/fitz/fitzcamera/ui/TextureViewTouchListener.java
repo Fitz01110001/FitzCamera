@@ -15,16 +15,18 @@ public class TextureViewTouchListener implements View.OnTouchListener {
 
     private float distance;
     private float preDistance;
+    private TextureViewTouchCallBack mTextureViewTouchCallBack;
 
     /**
      * 通过双指缩放滑动zoom，步进值可以稍大
      */
     private final float dZoom = 0.05f;
 
-    private CamManager mCamManager;
+    private CamManager.ICamManager mICamManager;
 
-    public TextureViewTouchListener(CamManager camManager) {
-        mCamManager = camManager;
+    public TextureViewTouchListener(CamManager.ICamManager mICamManager , TextureViewTouchCallBack callBack) {
+        mICamManager = mICamManager;
+        mTextureViewTouchCallBack = callBack;
     }
 
     /**
@@ -43,7 +45,7 @@ public class TextureViewTouchListener implements View.OnTouchListener {
             //单个手指触摸
             case MotionEvent.ACTION_DOWN:
                 Log.d(TAG, "ACTION_DOWN");
-                mode = 1;
+                mode = 0;
                 break;
             //两指触摸
             case MotionEvent.ACTION_POINTER_DOWN:
@@ -51,36 +53,35 @@ public class TextureViewTouchListener implements View.OnTouchListener {
                 Log.d(TAG, "ACTION_POINTER_DOWN," + "preDistance:" + preDistance);
                 //当两指间距大于10时，计算两指中心点
                 if (preDistance > 10f) {
-                    mode = 2;
+                    mode = 5;
                 }
                 break;
             case MotionEvent.ACTION_UP:
                 Log.d(TAG, "ACTION_UP");
-                mode = 0;
+                mTextureViewTouchCallBack.onClick(mode == 0,v);
+                mode = 1;
                 break;
             case MotionEvent.ACTION_POINTER_UP:
                 Log.d(TAG, "ACTION_POINTER_UP");
-                mode = 0;
+                mode = 1;
                 break;
             case MotionEvent.ACTION_MOVE:
                 //当两指缩放，计算缩放比例
-                if (mode == 2) {
+                if (mode == 5) {
                     distance = getDistance(event);
                     float deltaDistance = distance - preDistance;
                     Log.d(TAG, "ACTION_MOVE," + " deltaDistance:" + deltaDistance);
                     if (deltaDistance > 1f) {
                         //两指间有滑动，需要zoom
-                        mCamManager.zoomIn(dZoom);
+                        mICamManager.IzoomIn(dZoom);
                     } else if (deltaDistance < -1f) {
-                        mCamManager.zoomOut(dZoom);
+                        mICamManager.IzoomOut(dZoom);
                     }
                     preDistance = distance;
                 }
                 break;
         }
-        //进行缩放
-        Log.d(TAG, "do zoom");
-        return true;
+        return false;
     }
 
     /*获取两指之间的距离*/
@@ -91,5 +92,8 @@ public class TextureViewTouchListener implements View.OnTouchListener {
         return distance;
     }
 
+    public interface TextureViewTouchCallBack {
+        void onClick(boolean click,View v);
+    }
 
 }

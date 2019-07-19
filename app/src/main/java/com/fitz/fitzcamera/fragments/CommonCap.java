@@ -41,16 +41,16 @@ import java.util.List;
 public class CommonCap extends Fragment {
     private static final String TAG = "CommonCap";
 
-    private CamManager mCamManager;
+    private CamManager.ICamManager mICamManager;
 
     /**
      * 默认显示的zoom值，为1
-     * */
+     */
     private final int defaultZoom = 100;
 
     /**
      * 通过快门键左右滑动zoom，步进值要小
-     * */
+     */
     private final float dZoom = 0.02f;
 
     /**
@@ -60,12 +60,12 @@ public class CommonCap extends Fragment {
 
     /**
      * 切换镜头
-     * */
+     */
     private ImageButton switchCamera;
 
     /**
      * 滑动快门键时显示的缩放条
-     * */
+     */
     private LinearLayout zoombar;
 
     /**
@@ -75,25 +75,18 @@ public class CommonCap extends Fragment {
 
     /**
      * 显示当前zoom值
-     * */
+     */
     private TextView mZoomLevel;
 
     /**
      * 切换镜头时弹出的menu
-     * */
+     */
     private QMUIListPopup mListPopup;
 
     private View.OnClickListener mButtonOnClickListener = new View.OnClickListener() {
         @Override
         public void onClick(View v) {
             switch (v.getId()) {
-                case R.id.button_shutter:
-                    Log.d(TAG, "点击拍照");
-                    //mCamManager.onPause();
-                    String imageUri = mCamManager.takeShot();
-                    Toast.makeText(CommonCap.this.getActivity(), imageUri, Toast.LENGTH_SHORT).show();
-                    //mCamManager.getLastFrame(mTextureView.getBitmap());
-                    break;
                 case R.id.button_switchCamera:
                     initListPopupIfNeed();
                     mListPopup.setAnimStyle(QMUIPopup.ANIM_GROW_FROM_CENTER);
@@ -115,7 +108,7 @@ public class CommonCap extends Fragment {
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture texture, int width, int height) {
             Log.d(TAG, "onSurfaceTextureAvailable");
-            mCamManager.openCamera(mTextureView);
+            mICamManager.IopenCamera(mTextureView);
         }
 
         @Override
@@ -130,7 +123,7 @@ public class CommonCap extends Fragment {
 
         @Override
         public void onSurfaceTextureUpdated(SurfaceTexture texture) {
-            Log.d(TAG, "onSurfaceTextureUpdated");
+            //Log.d(TAG, "onSurfaceTextureUpdated");
 
         }
 
@@ -141,7 +134,7 @@ public class CommonCap extends Fragment {
      */
     private void initListPopupIfNeed() {
         if (mListPopup == null) {
-            String[] listItems = mCamManager.getCameraIDList() != null ? mCamManager.getCameraIDList() : new String[]{
+            String[] listItems = mICamManager.IgetCameraIDList() != null ? mICamManager.IgetCameraIDList() : new String[]{
                     "0",
                     "1",
             };
@@ -156,7 +149,7 @@ public class CommonCap extends Fragment {
                 @Override
                 public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
                     Toast.makeText(getActivity(), "camera " + i, Toast.LENGTH_SHORT).show();
-                    mCamManager.switchCamera(String.valueOf(i), new CamManager.CameraInfoCallback() {
+                    mICamManager.IswitchCamera(String.valueOf(i), new CamManager.CameraInfoCallback() {
                         @Override
                         public void cameraFacing(int facing) {
                         }
@@ -185,10 +178,9 @@ public class CommonCap extends Fragment {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getActivity().getWindow().setFormat(PixelFormat.TRANSLUCENT);
-        mCamManager = new CamManager(this, this.getActivity());
-        mCamManager.checkCameraPermission();
-        mCamManager.getDeviceInfo();
-
+        mICamManager = new CamManager(this, this.getActivity()).getICamManager();
+        mICamManager.IcheckCameraPermission();
+        mICamManager.IgetDeviceInfo();
     }
 
     @Override
@@ -200,31 +192,50 @@ public class CommonCap extends Fragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        shutter = view.findViewById(R.id.button_shutter);
-        shutter.setOnClickListener(mButtonOnClickListener);
+
         zoombar = view.findViewById(R.id.zoombar_horizontal);
-        switchCamera = view.findViewById(R.id.button_switchCamera);
-        switchCamera.setOnClickListener(mButtonOnClickListener);
-        shutter.setOnTouchListener(new ShutterTouchListener(this.getActivity(), new ShutterTouchListener.TouchCallBack() {
+
+        shutter = view.findViewById(R.id.button_shutter);
+        shutter.setOnTouchListener(new ShutterTouchListener(this.getActivity(), new ShutterTouchListener.ShutterTouchCallBack() {
             @Override
             public void onTouchMove(int dx, int diffX) {
                 switchCamera.setVisibility(View.GONE);
                 zoombar.setVisibility(View.VISIBLE);
-                if (diffX > 0) {
-                    mCamManager.zoomIn(dZoom);
-                } else if (diffX < 0) {
-                    mCamManager.zoomOut(dZoom);
+                if (diffX > 0 && dx > 0) {
+                    mICamManager.IzoomIn(dZoom);
+                } else if (diffX < 0 && dx < 0) {
+                    mICamManager.IzoomOut(dZoom);
                 }
             }
 
             @Override
-            public void onTouchUP() {
+            public void onTouchUP(boolean click) {
                 switchCamera.setVisibility(View.VISIBLE);
                 zoombar.setVisibility(View.GONE);
+                if (click) {
+                    Log.d(TAG, "点击拍照");
+                    //mICamManager.onPause();
+                    String imageUri = mICamManager.ItakeShot();
+                    Toast.makeText(CommonCap.this.getActivity(), imageUri, Toast.LENGTH_SHORT).show();
+                    //mICamManager.getLastFrame(mTextureView.getBitmap());
+                }
             }
         }));
+
+        switchCamera = view.findViewById(R.id.button_switchCamera);
+        switchCamera.setOnClickListener(mButtonOnClickListener);
+
         mTextureView = view.findViewById(R.id.texture_commoncap);
-        mTextureView.setOnTouchListener(new TextureViewTouchListener(mCamManager));
+        mTextureView.setOnTouchListener(new TextureViewTouchListener(mICamManager, new TextureViewTouchListener.TextureViewTouchCallBack() {
+            @Override
+            public void onClick(boolean click,View v) {
+                if (click) {
+                    // TODO: 19-7-19 用于点击对焦的处理
+                    //mICamManager.IFocus(v);
+                }
+            }
+        }));
+
         mZoomLevel = view.findViewById(R.id.tv_zoomLevel);
     }
 
@@ -238,23 +249,22 @@ public class CommonCap extends Fragment {
         super.onResume();
         setZoomRatioText((int) defaultZoom / 100);
         if (mTextureView.isAvailable()) {
-            mCamManager.openCamera(mTextureView);
+            mICamManager.IopenCamera(mTextureView);
         } else {
             mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
         }
     }
 
     /**
-     * 更新 zoom 显示
-     * */
+     * 更新 setZoom 显示
+     */
     public void updateZoomRatio(float zoomRatio) {
         setZoomRatioText(zoomRatio);
     }
 
-
     /**
      * 设置当前的zoom值，保留一位小数
-     * */
+     */
     private void setZoomRatioText(float zoomRatio) {
         if (zoomRatio < 1f) {
             mZoomLevel.setText("WIDE");
@@ -267,7 +277,7 @@ public class CommonCap extends Fragment {
 
     @Override
     public void onPause() {
-        mCamManager.onPause();
+        mICamManager.IonPause();
         super.onPause();
     }
 
@@ -275,7 +285,5 @@ public class CommonCap extends Fragment {
     public void onStop() {
         super.onStop();
     }
-
-
 
 }

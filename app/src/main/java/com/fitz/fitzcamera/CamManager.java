@@ -15,27 +15,31 @@ import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureFailure;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
+import android.hardware.camera2.params.MeteringRectangle;
 import android.hardware.camera2.params.StreamConfigurationMap;
+import android.media.Image;
 import android.media.ImageReader;
 import android.os.Build;
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.os.Message;
 import android.util.Log;
 import android.util.Size;
 import android.util.SparseIntArray;
 import android.view.Surface;
+import android.view.View;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import com.fitz.fitzcamera.feature.focus.Focus;
+import com.fitz.fitzcamera.feature.zoom.Zoom;
 import com.fitz.fitzcamera.fragments.CommonCap;
 import com.fitz.fitzcamera.ui.AutoFitTextureView;
 
@@ -70,6 +74,10 @@ public class CamManager {
         ORIENTATIONS.append(Surface.ROTATION_180, 270);
         ORIENTATIONS.append(Surface.ROTATION_270, 180);
     }
+
+    private Zoom mZoom;
+
+    private Focus mFocus;
 
     /**
      * An additional thread for running tasks that shouldn't block the UI.
@@ -114,7 +122,7 @@ public class CamManager {
     /**
      * 默认后置主摄
      */
-    private String mDefaultCameraId = "0";
+    protected String mDefaultCameraId = "0";
 
     private final String deviceModeLG = "LM-X625N";
 
@@ -192,11 +200,11 @@ public class CamManager {
 
     private AutoFitTextureView mTextureView;
 
-
-
     public CamManager(CommonCap fg, Activity context) {
         mCommonCap = fg;
         mContext = context;
+        mZoom = new Zoom(mICamManager);
+        mFocus = new Focus(mICamManager);
         mCameraManager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
         startBackgroundThread();
     }
@@ -210,7 +218,7 @@ public class CamManager {
         return null;
     }
 
-    public void checkCameraPermission() {
+    private void checkCameraPermission() {
         if (ContextCompat.checkSelfPermission(mContext, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED || ContextCompat
                 .checkSelfPermission(mContext, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
             requestCameraPermission();
@@ -254,7 +262,7 @@ public class CamManager {
     }
 
     private void setupImageReader(Size s) {
-        mImageReader = ImageReader.newInstance(s.getWidth(), s.getHeight(), ImageFormat.JPEG, /*maxImages*/2);
+        mImageReader = ImageReader.newInstance(s.getWidth(), s.getHeight(), ImageFormat.JPEG, /*maxImages*/20);
         mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mBackgroundHandler);
     }
 
@@ -262,25 +270,28 @@ public class CamManager {
      * Closes the current {@link CameraDevice}.
      */
     private void closeCamera() {
-        synchronized (mCameraDevice) {
-            if (null != mCameraCaptureSession) {
-                try {
-                    mCameraCaptureSession.stopRepeating();
-                } catch (CameraAccessException e) {
-                    e.printStackTrace();
+        if (mCameraDevice != null) {
+            synchronized (mCameraDevice) {
+                if (null != mCameraCaptureSession) {
+                    try {
+                        mCameraCaptureSession.stopRepeating();
+                    } catch (CameraAccessException e) {
+                        e.printStackTrace();
+                    }
+                    mCameraCaptureSession.close();
+                    mCameraCaptureSession = null;
                 }
-                mCameraCaptureSession.close();
-                mCameraCaptureSession = null;
-            }
-            if (null != mCameraDevice) {
-                mCameraDevice.close();
-                mCameraDevice = null;
-            }
-            if (null != mImageReader) {
-                mImageReader.close();
-                mImageReader = null;
+                if (null != mCameraDevice) {
+                    mCameraDevice.close();
+                    mCameraDevice = null;
+                }
+                if (null != mImageReader) {
+                    mImageReader.close();
+                    mImageReader = null;
+                }
             }
         }
+
     }
 
     public void onPause() {
@@ -306,7 +317,7 @@ public class CamManager {
                     .getRotation();
             captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, getOrientation(rotation));
             setZoomRation(captureBuilder);
-            mCameraCaptureSession.capture(captureBuilder.build(), mCaptureCallback, mBackgroundHandler);
+            mCameraCaptureSession.capture(captureBuilder.build(), null, mBackgroundHandler);
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
@@ -364,7 +375,8 @@ public class CamManager {
         @Override
         public void onImageAvailable(ImageReader reader) {
             Log.d(TAG, "onImageAvailable");
-            mBackgroundHandler.post(new SaveImage(reader.acquireNextImage(), imageName));
+            Image image = reader.acquireNextImage();
+            mBackgroundHandler.post(new SaveImage(image, imageName));
         }
 
     };
@@ -380,7 +392,7 @@ public class CamManager {
     /**
      * opencamera with given id,供外部使用
      */
-    public void openCamera(AutoFitTextureView textureView) {
+    private void openCamera(AutoFitTextureView textureView) {
         mTextureView = textureView;
         try {
             for (String cameraId : mCameraManager.getCameraIdList()) {
@@ -399,7 +411,7 @@ public class CamManager {
 
     /**
      * 内部使用的opencamera
-     * */
+     */
     private void openCamera(String cameraId) {
         mCameraId = cameraId;
         try {
@@ -508,7 +520,7 @@ public class CamManager {
 
     /**
      * 计算预览view尺寸
-     * */
+     */
     private Size calPreviewSize(int maxPreviewWidth, int maxPreviewHeight, int rotatedPreviewWidth, int rotatedPreviewHeight) {
         //Log.d(TAG, maxPreviewWidth + " " + maxPreviewHeight + " " + rotatedPreviewWidth + " " + rotatedPreviewHeight);
         if (rotatedPreviewWidth >= maxPreviewWidth || rotatedPreviewHeight >= maxPreviewHeight) {
@@ -631,9 +643,8 @@ public class CamManager {
         @Override
         public void onCaptureStarted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, long timestamp, long frameNumber) {
             super.onCaptureStarted(session, request, timestamp, frameNumber);
-            Log.d(CaptureTAG, "onCaptureStarted");
+            //Log.d(CaptureTAG, "onCaptureStarted");
         }
-
 
         @Override
         public void onCaptureProgressed(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request,
@@ -641,7 +652,6 @@ public class CamManager {
             super.onCaptureProgressed(session, request, partialResult);
 
         }
-
 
         @Override
         public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult result) {
@@ -676,9 +686,9 @@ public class CamManager {
     };
 
     /**
-     * Calculates sensor crop region for a zoom level (zoom >= 1.0).
+     * Calculates sensor crop region for a setZoom level (setZoom >= 1.0).
      *
-     * @param ratio the zoom level.
+     * @param ratio the setZoom level.
      * @return Crop region.
      */
     private Rect cropRegionForZoom(float ratio) {
@@ -695,96 +705,77 @@ public class CamManager {
     }
 
     /**
-     * LG 1885的zoom实现(手动切换镜头)
-     */
-    public void setZoomRatioInLG(float zoomRatio) {
-        Log.d(TAG, "setZoomRatioInLG:" + mCameraId + " zoomRatio:" + zoomRatio);
-        if (!mCameraId.equals(mWideCameraId) && zoomRatio >= 1.0f) {
-            //非广角镜头的zoom
-            mCurrentRect = cropRegionForZoom(zoomRatio);
-            mPreviewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, mCurrentRect);
-            setRepeatingPreview();
-        } else if (!mCameraId.equals(mWideCameraId) && zoomRatio < 1.0f) {
-            //非广角镜头zoom到1.0以下，应切换到广角。并在启动广角时，设置zoom=1+zoomdiff
-            switchCamera(mWideCameraId, new CameraInfoCallback() {
-                @Override
-                public void cameraFacing(int facing) {
-
-                }
-
-                @Override
-                public void cameraDeviceOnConfigured(CaptureRequest.Builder builder) {
-                    Log.d(TAG, "cameraDeviceOnConfigured builder.set zoomDiff");
-                    mCurrentRect = cropRegionForZoom(1 + zoomDiff);
-                    builder.set(CaptureRequest.SCALER_CROP_REGION, mCurrentRect);
-                }
-            });
-        } else if (mCameraId.equals(mWideCameraId) && zoomRatio >= 1.0f) {
-            //广角镜头zoom到1X以上，广角镜头切到主摄
-            switchCamera(mDefaultCameraId, null);
-        } else if (mCameraId.equals(mWideCameraId) && zoomRatio < 1.0f) {
-            //广角镜头下zoom,广角镜头zoom范围也是 1.0~max,zoomRatio需要换算
-            zoomRatio += zoomDiff;
-            mCurrentRect = cropRegionForZoom(zoomRatio);
-            mPreviewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, mCurrentRect);
-            setRepeatingPreview();
-        }
-    }
-
-    /**
-     * Mate20 pro的zoom实现,直接传值即可(0.6~10)
-     */
-    public void setZoomRatioInHW(float zoomRatio) {
-        Log.d(TAG, mCameraId + " zoomRatio:" + zoomRatio);
-        mCurrentRect = cropRegionForZoom(zoomRatio);
-        mPreviewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, mCurrentRect);
-        setRepeatingPreview();
-    }
-
-    /**
      * 放大，对数值做判断处理
-     * */
-    public void zoomIn(float dZoom) {
+     */
+    private void zoomIn(float dZoom) {
         Log.d(TAG, "zoomIn");
         mCurrentZoom = mCurrentZoom + dZoom;
         if (mCurrentZoom >= mMaxZoom) {
             mCurrentZoom = mMaxZoom;
         }
-        zoom(mCurrentZoom);
+        mZoom.setZoom(currentDeviceMode, mCurrentZoom);
     }
 
     /**
      * 缩小，对数值做判断处理
-     * */
-    public void zoomOut(float dZoom) {
+     */
+    private void zoomOut(float dZoom) {
         Log.d(TAG, "zoomOut");
         mCurrentZoom = mCurrentZoom - dZoom;
         if (mCurrentZoom <= mMinZoom) {
             mCurrentZoom = mMinZoom;
         }
-        zoom(mCurrentZoom);
-    }
-
-    /**
-     * 区分设备实现zoom，更新zoom数值
-     */
-    private void zoom(float zoomRatio) {
-        Log.d(TAG, "zoom,zoomRatio:" + zoomRatio);
-        mCommonCap.updateZoomRatio(zoomRatio);
-        if (currentDeviceMode.equals(deviceModeLG)) {
-            setZoomRatioInLG(zoomRatio);
-        } else if (currentDeviceMode.equals(deviceModeHW)) {
-            setZoomRatioInHW(zoomRatio);
-        }
+        mZoom.setZoom(currentDeviceMode, mCurrentZoom);
     }
 
     /**
      * 切换镜头
-     * */
-    public void switchCamera(String cameraId, @Nullable CameraInfoCallback cameraInfoCallback) {
+     */
+    private void switchCamera(String cameraId, @Nullable CameraInfoCallback cameraInfoCallback) {
         mCameraInfoCallback = cameraInfoCallback;
         closeCamera();
         openCamera(cameraId);
+    }
+
+    /**
+     * 获取设备信息
+     */
+    private void getDeviceInfo() {
+        String str1 = Build.MODEL;
+        String str2 = android.os.Build.BRAND;
+        currentDeviceMode = str1;
+        Log.d(TAG, "MODEL:" + str1);
+        Log.d(TAG, "BRAND:" + str2);
+    }
+
+    private String getCameraId() {
+        return mCameraId;
+    }
+
+    private void setZoomPreview(Rect rect) {
+        mPreviewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, rect);
+        setRepeatingPreview();
+    }
+
+    private void setFocusPreview(MeteringRectangle[] mRegions) {
+        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, mRegions);
+        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_REGIONS, mRegions);
+        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
+        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_START);
+        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CameraMetadata.CONTROL_AE_PRECAPTURE_TRIGGER_START);
+        setRepeatingPreview();
+    }
+
+    private String getWideCameraId() {
+        return mWideCameraId;
+    }
+
+    private float getZoomDiff() {
+        return zoomDiff;
+    }
+
+    public void updateZoomText(float zoom) {
+        mCommonCap.updateZoomRatio(zoom);
     }
 
     /**
@@ -796,15 +787,132 @@ public class CamManager {
         void cameraDeviceOnConfigured(CaptureRequest.Builder builder);
     }
 
-    /**
-     * 获取设备信息
-     * */
-    public void getDeviceInfo() {
-        String str1 = Build.MODEL;
-        String str2 = android.os.Build.BRAND;
-        currentDeviceMode = str1;
-        Log.d(TAG, "MODEL:" + str1);
-        Log.d(TAG, "BRAND:" + str2);
+    public ICamManager getICamManager() {
+        return mICamManager;
+    }
+
+    public ICamManager mICamManager = new ICamManager() {
+        @Override
+        public void IzoomIn(float dZoom) {
+            zoomIn(dZoom);
+        }
+
+        @Override
+        public void IzoomOut(float dZoom) {
+            zoomOut(dZoom);
+        }
+
+        @Override
+        public void IswitchCamera(String cameraId, @Nullable CameraInfoCallback cameraInfoCallback) {
+            switchCamera(cameraId, cameraInfoCallback);
+        }
+
+        @Override
+        public void IgetDeviceInfo() {
+            getDeviceInfo();
+        }
+
+        @Override
+        public String IgetCameraId() {
+            return getCameraId();
+        }
+
+        @Override
+        public void IsetZoomPreview(Rect rect) {
+            setZoomPreview(rect);
+        }
+
+        @Override
+        public String IgetWideCameraId() {
+            return getWideCameraId();
+        }
+
+        @Override
+        public float IgetZoomDiff() {
+            return getZoomDiff();
+        }
+
+        @Override
+        public void IupdateZoomText(float zoom) {
+            updateZoomText(zoom);
+        }
+
+        @Override
+        public void IcheckCameraPermission() {
+            checkCameraPermission();
+        }
+
+        @Override
+        public String[] IgetCameraIDList() {
+            return getCameraIDList();
+        }
+
+        @Override
+        public String ItakeShot() {
+            return takeShot();
+        }
+
+        @Override
+        public void IopenCamera(AutoFitTextureView textureView) {
+            openCamera(textureView);
+        }
+
+        @Override
+        public void IonPause() {
+            onPause();
+        }
+
+        @Override
+        public Rect IcropRegionForZoom(float ratio) {
+            return cropRegionForZoom(ratio);
+        }
+
+        @Override
+        public void IFocus(View v) {
+            mFocus.setFocus(v);
+        }
+
+        @Override
+        public void IsetFocusPreview(MeteringRectangle[] mRegions) {
+            setFocusPreview(mRegions);
+        }
+    };
+
+
+    public interface ICamManager {
+        void IzoomIn(float dZoom);
+
+        void IzoomOut(float dZoom);
+
+        void IswitchCamera(String cameraId, @Nullable CameraInfoCallback cameraInfoCallback);
+
+        void IgetDeviceInfo();
+
+        String IgetCameraId();
+
+        void IsetZoomPreview(Rect rect);
+
+        String IgetWideCameraId();
+
+        float IgetZoomDiff();
+
+        void IupdateZoomText(float zoom);
+
+        void IcheckCameraPermission();
+
+        String[] IgetCameraIDList();
+
+        String ItakeShot();
+
+        void IopenCamera(AutoFitTextureView textureView);
+
+        void IonPause();
+
+        Rect IcropRegionForZoom(float ratio);
+
+        void IFocus(View v);
+
+        void IsetFocusPreview(MeteringRectangle[] mRegions);
     }
 
 }

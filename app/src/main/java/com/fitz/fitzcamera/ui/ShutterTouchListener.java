@@ -2,27 +2,25 @@ package com.fitz.fitzcamera.ui;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
-import android.print.PrinterId;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 
-import com.fitz.fitzcamera.CamManager;
-
 @SuppressLint("AppCompatCustomView")
 public class ShutterTouchListener implements View.OnTouchListener {
 
     private String TAG = "ShutterTouchListener";
-    private TouchCallBack mTouchCallBack;
+    private ShutterTouchCallBack mTouchCallBack;
     private int lastX;
     private int downX;
     private Context mContext;
     private int screenWidth;
     private int screenHeight;
+    private int mode = -1;
 
 
-    public ShutterTouchListener(Context context, TouchCallBack callBack) {
+    public ShutterTouchListener(Context context, ShutterTouchCallBack callBack) {
         mTouchCallBack = callBack;
         mContext = context;
         DisplayMetrics dm = mContext.getResources().getDisplayMetrics();
@@ -47,13 +45,16 @@ public class ShutterTouchListener implements View.OnTouchListener {
             case MotionEvent.ACTION_DOWN:
                 lastX = (int) event.getRawX();//获取触摸事件触摸位置的原始X坐标
                 downX = lastX;
+                mode = 0;
                 Log.d(TAG, "ACTION_DOWN,X:" + lastX);
                 break;
             case MotionEvent.ACTION_UP:
                 Log.d(TAG, "ACTION_UP");
-                mTouchCallBack.onTouchUP();
+                mTouchCallBack.onTouchUP(mode == 0);
+                mode = 1;
                 break;
             case MotionEvent.ACTION_MOVE:
+                mode = 2;
                 int dx = (int) event.getRawX() - lastX;
                 int l = v.getLeft() + dx;
                 int b = v.getBottom();
@@ -74,16 +75,19 @@ public class ShutterTouchListener implements View.OnTouchListener {
                 lastX = (int) event.getRawX();
                 int diffX = lastX - downX;
                 Log.d(TAG, "ACTION_MOVE,dx:" + dx + " diffX:" + diffX);
-                mTouchCallBack.onTouchMove(dx, diffX);
+                if(dx != 0){
+                    mTouchCallBack.onTouchMove(dx, diffX);
+                    return true;
+                }
                 break;
         }
-        return true;
+        return false;
     }
 
-    public interface TouchCallBack {
+    public interface ShutterTouchCallBack {
         void onTouchMove(int dx, int diffX);
 
-        void onTouchUP();
+        void onTouchUP(boolean click);
     }
 
 
