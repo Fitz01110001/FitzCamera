@@ -19,7 +19,7 @@ public class Focus {
 
     public void setFocus(View v){
 
-        
+
         mICamManager.IsetFocusPreview(new MeteringRectangle[] {new MeteringRectangle(mRect, 1000)});
     }
 

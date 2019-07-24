@@ -22,10 +22,10 @@ public class TextureViewTouchListener implements View.OnTouchListener {
      */
     private final float dZoom = 0.05f;
 
-    private CamManager.ICamManager mICamManager;
+    protected CamManager.ICamManager mICamManager;
 
     public TextureViewTouchListener(CamManager.ICamManager mICamManager , TextureViewTouchCallBack callBack) {
-        mICamManager = mICamManager;
+        this.mICamManager = mICamManager;
         mTextureViewTouchCallBack = callBack;
     }
 
@@ -81,7 +81,7 @@ public class TextureViewTouchListener implements View.OnTouchListener {
                 }
                 break;
         }
-        return false;
+        return true;
     }
 
     /*获取两指之间的距离*/
