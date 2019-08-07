@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/zoom_progress"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal">
+
+    <com.example.zoomprogressview.zoomUI.ZoomCircle
+        android:id="@+id/circle"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        app:text="W"
+        app:bgColor="@color/colorTransparentGrey"/>
+
+    <ImageView
+        android:id="@+id/spot1"
+        android:layout_width="15dp"
+        android:layout_height="match_parent"
+        android:scaleType="fitCenter"
+        app:srcCompat="@drawable/spot_w" />
+
+    <ImageView
+        android:id="@+id/spot2"
+        android:layout_width="15dp"
+        android:layout_height="match_parent"
+        app:srcCompat="@drawable/spot_w" />
+
+    <ImageView
+        android:id="@+id/spot3"
+        android:layout_width="15dp"
+        android:layout_height="match_parent"
+        app:srcCompat="@drawable/spot_w" />
+
+    <ImageView
+        android:id="@+id/spot4"
+        android:layout_width="15dp"
+        android:layout_height="match_parent"
+        app:srcCompat="@drawable/spot_w" />
+
+    <ImageView
+        android:id="@+id/spot5"
+        android:layout_width="15dp"
+        android:layout_height="match_parent"
+        app:srcCompat="@drawable/spot_w" />
+
+    <com.example.zoomprogressview.zoomUI.ZoomCircle
+        android:id="@+id/circle2"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        app:text="x1"
+        app:bgColor="@color/colorTransparentGrey" />
+
+    <ImageView
+        android:id="@+id/spot6"
+        android:layout_width="15dp"
+        android:layout_height="match_parent"
+        app:srcCompat="@drawable/spot_w" />
+
+    <ImageView
+        android:id="@+id/spot7"
+        android:layout_width="15dp"
+        android:layout_height="match_parent"
+        app:srcCompat="@drawable/spot_w" />
+
+    <ImageView
+        android:id="@+id/spot8"
+        android:layout_width="15dp"
+        android:layout_height="match_parent"
+        app:srcCompat="@drawable/spot_w" />
+
+    <ImageView
+        android:id="@+id/spot9"
+        android:layout_width="15dp"
+        android:layout_height="match_parent"
+        app:srcCompat="@drawable/spot_w" />
+
+    <ImageView
+        android:id="@+id/spot10"
+        android:layout_width="15dp"
+        android:layout_height="match_parent"
+        app:srcCompat="@drawable/spot_w" />
+
+    <ImageView
+        android:id="@+id/spot11"
+        android:layout_width="15dp"
+        android:layout_height="match_parent"
+        app:srcCompat="@drawable/spot_w" />
+
+    <ImageView
+        android:id="@+id/spot12"
+        android:layout_width="15dp"
+        android:layout_height="match_parent"
+        app:srcCompat="@drawable/spot_w" />
+
+    <ImageView
+        android:id="@+id/spot13"
+        android:layout_width="15dp"
+        android:layout_height="match_parent"
+        app:srcCompat="@drawable/spot_w" />
+
+    <ImageView
+        android:id="@+id/spot14"
+        android:layout_width="15dp"
+        android:layout_height="match_parent"
+        app:srcCompat="@drawable/spot_w" />
+
+    <ImageView
+        android:id="@+id/spot15"
+        android:layout_width="15dp"
+        android:layout_height="match_parent"
+        app:srcCompat="@drawable/spot_w" />
+
+    <ImageView
+        android:id="@+id/spot16"
+        android:layout_width="15dp"
+        android:layout_height="match_parent"
+        app:srcCompat="@drawable/spot_w" />
+
+    <ImageView
+        android:id="@+id/spot17"
+        android:layout_width="15dp"
+        android:layout_height="match_parent"
+        app:srcCompat="@drawable/spot_w" />
+
+    <ImageView
+        android:id="@+id/spot18"
+        android:layout_width="15dp"
+        android:layout_height="match_parent"
+        app:srcCompat="@drawable/spot_w" />
+
+    <ImageView
+        android:id="@+id/spot19"
+        android:layout_width="15dp"
+        android:layout_height="match_parent"
+        app:srcCompat="@drawable/spot_w" />
+
+    <com.example.zoomprogressview.zoomUI.ZoomCircle
+        android:id="@+id/circle3"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        app:text="x10"
+        app:bgColor="@color/colorTransparent"
+        app:circleColor="@color/colorTransparent"/>
+
+</LinearLayout>

@@ -10,6 +10,8 @@ import android.widget.ImageButton;
 import android.widget.LinearLayout;
 
 import com.example.zoomprogressview.custUI.ShutterTouchListener;
+import com.example.zoomprogressview.zoomUI.ZoomCircle;
+import com.example.zoomprogressview.zoomUI.zoomSlideTouchImpl;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -17,6 +19,8 @@ public class MainActivity extends AppCompatActivity {
     private ImageButton mShutterButton;
     private ImageButton mSwitchButton;
     private LinearLayout zoombar;
+    private ZoomCircle mZoomCircle;
+    private View zoomSlide;
 
 
     @Override
@@ -24,6 +28,29 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         zoombar = findViewById(R.id.zoombar_horizontal);
+        zoomSlide = findViewById(R.id.zoom_slide);
+        mZoomCircle = findViewById(R.id.cur_zoom_circle);
+        mZoomCircle.setOnTouchListener(new zoomSlideTouchImpl(this, new zoomSlideTouchImpl.SlideCallback() {
+            @Override
+            public void OnSlideDown() {
+                zoomSlide.setVisibility(View.VISIBLE);
+            }
+
+            @Override
+            public void OnSlideUp() {
+                zoomSlide.setVisibility(View.GONE);
+            }
+
+            @Override
+            public void OnSlideMove(int dx) {
+                int l = zoomSlide.getLeft() + dx;
+                int b = zoomSlide.getBottom();
+                int r = zoomSlide.getRight() + dx;
+                int t = zoomSlide.getTop();
+                zoomSlide.layout(l, t, r, b);
+                zoomSlide.postInvalidate();
+            }
+        }));
         mSwitchButton = findViewById(R.id.button_switchCamera);
         mShutterButton = findViewById(R.id.button_shutter);
         mShutterButton.setOnTouchListener(new ShutterTouchListener(this, new ShutterTouchListener.TouchCallBack() {
