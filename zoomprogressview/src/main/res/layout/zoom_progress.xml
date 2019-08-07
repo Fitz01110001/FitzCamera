@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.example.zoomprogressview.zoomUI.ZoomProgressLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/zoom_progress"
     android:layout_width="wrap_content"
@@ -143,4 +143,4 @@
         app:bgColor="@color/colorTransparent"
         app:circleColor="@color/colorTransparent"/>
 
-</LinearLayout>
+</com.example.zoomprogressview.zoomUI.ZoomProgressLayout>
