@@ -6,9 +6,22 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#2196F3"
-    android:gravity="bottom"
+    android:gravity="bottom|center_horizontal"
     android:orientation="vertical"
     tools:context=".MainActivity">
+
+
+    <com.example.zoomprogressview.zoomRuler.ZoomScaleViewGroup
+        android:id="@+id/zoomScaleGroup"
+        android:layout_width="300dp"
+        android:layout_height="40dp"
+        app:indicatorColor="#ffffff"
+        app:initScrollX="5"
+        app:rulerTextSize="20dp"
+        app:scaleColor="#ffffff"
+        app:scaleTotalCount="40"
+        app:startScale="-10" />
+
 
     <include layout="@layout/zoom_bar" />
 

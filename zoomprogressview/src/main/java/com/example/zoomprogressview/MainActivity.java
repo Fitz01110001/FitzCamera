@@ -10,6 +10,7 @@ import android.widget.ImageButton;
 import android.widget.LinearLayout;
 
 import com.example.zoomprogressview.custUI.ShutterTouchListener;
+import com.example.zoomprogressview.zoomRuler.ZoomScaleViewGroup;
 import com.example.zoomprogressview.zoomUI.ZoomCircle;
 import com.example.zoomprogressview.zoomUI.zoomSlideTouchImpl;
 
@@ -21,6 +22,7 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout zoombar;
     private ZoomCircle mZoomCircle;
     private View zoomSlide;
+    private ZoomScaleViewGroup mZoomScaleViewGroup;
 
 
     @Override
@@ -66,6 +68,9 @@ public class MainActivity extends AppCompatActivity {
                 zoombar.setVisibility(View.GONE);
             }
         }));
+
+
+        mZoomScaleViewGroup = findViewById(R.id.zoomScaleGroup);
 
     }
 
