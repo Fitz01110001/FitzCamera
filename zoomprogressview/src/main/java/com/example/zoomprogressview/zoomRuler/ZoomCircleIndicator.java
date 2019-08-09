@@ -27,7 +27,6 @@ public class ZoomCircleIndicator extends View {
     private int strokeWidth = 3;
     protected Canvas mCanvas;
     private boolean onZoom = false;
-    private Paint mTextPaint;
 
     public ZoomCircleIndicator(Context context) {
         this(context, null);
@@ -43,7 +42,7 @@ public class ZoomCircleIndicator extends View {
 
     @Override
     public void onDraw(Canvas canvas) {
-        Log.d(TAG, "onDraw,onZoom:"+onZoom);
+        //Log.d(TAG, "onDraw,onZoom:"+onZoom);
         mCanvas = canvas;
         bgColor = onZoom ? Color.WHITE : bgAttrColor;
         circleColor = onZoom ? Color.WHITE : circleAttrColor;
@@ -74,7 +73,6 @@ public class ZoomCircleIndicator extends View {
     }
 
     private void drawText() {
-
         //绘制文字
         if (text == null) {
             text = "x1";
@@ -87,19 +85,18 @@ public class ZoomCircleIndicator extends View {
         Paint.FontMetrics fontMetrics = mTextPaint.getFontMetrics();
         float distance = (fontMetrics.bottom - fontMetrics.top) / 2 - fontMetrics.bottom;
         float baseline = getHeight() / 2 + distance;
-        Log.d(TAG, "drawText,baseline:"+baseline);
+        //Log.d(TAG, "drawText,baseline:"+baseline);
         mCanvas.drawText(text, getWidth() / 2, baseline, mTextPaint);
     }
 
     public void setOnZoomState(boolean b) {
-        Log.d(TAG, "setOnZoomState");
+        //Log.d(TAG, "setOnZoomState");
         onZoom = b;
         postInvalidate();
     }
 
     public void setText(String s) {
-        Log.d(TAG, "setText,s:" + s);
-        //Log.d(TAG, "setText:" + s);
+        //Log.d(TAG, "setText,s:" + s);
         if (s == null) {
             text = "";
         } else {

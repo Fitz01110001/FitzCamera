@@ -19,6 +19,8 @@ import androidx.annotation.Nullable;
 
 import com.example.zoomprogressview.R;
 
+import static android.view.MotionEvent.ACTION_SCROLL;
+
 public class ZoomScaleViewGroup extends FrameLayout {
 
     private String TAG = "ZoomScaleViewGroup";
@@ -37,7 +39,7 @@ public class ZoomScaleViewGroup extends FrameLayout {
         @Override
         public void run() {
             mZoomCircleIndicator.setOnZoomState(false);
-            //mZoomScaleRuler.setVisibility(GONE);
+            mZoomScaleRuler.setVisibility(GONE);
         }
     };
 
@@ -72,7 +74,7 @@ public class ZoomScaleViewGroup extends FrameLayout {
         LayoutInflater.from(context).inflate(R.layout.zoom_ruler, this, true);
         //绘制指示器
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
         lp.gravity = Gravity.CENTER;
         mZoomCircleIndicator = new ZoomCircleIndicator(context);
         addView(mZoomCircleIndicator, lp);
@@ -81,10 +83,11 @@ public class ZoomScaleViewGroup extends FrameLayout {
             public boolean onTouch(View v, final MotionEvent event) {
                 switch (event.getAction()) {
                     case MotionEvent.ACTION_DOWN:
+                        Log.d(TAG, "ACTION_DOWN:");
                         mHandler.removeCallbacks(mRunnable);
                         mZoomCircleIndicator.setOnZoomState(true);
                         drawRuler();
-                        //mZoomScaleRuler.setVisibility(VISIBLE);
+                        mZoomScaleRuler.setVisibility(VISIBLE);
                         break;
                     case MotionEvent.ACTION_UP:
                         Log.d(TAG, "ACTION_UP:");
@@ -97,7 +100,11 @@ public class ZoomScaleViewGroup extends FrameLayout {
                         mZoomScaleRuler.setScrollCallback(new ZoomScaleRuler.ScrollCallback() {
                             @Override
                             public void setScale(float scale) {
-                                mZoomCircleIndicator.setText("x" + scale);
+                                if(scale < 1.0f){
+                                    mZoomCircleIndicator.setText("W");
+                                }else {
+                                    mZoomCircleIndicator.setText("x" + scale);
+                                }
                             }
                         });
                         break;

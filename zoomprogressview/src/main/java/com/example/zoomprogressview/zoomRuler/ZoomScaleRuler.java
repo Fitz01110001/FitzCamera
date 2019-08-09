@@ -6,6 +6,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Scroller;
@@ -18,6 +19,8 @@ public class ZoomScaleRuler extends View {
     private String TAG = "ZoomScaleRuler";
     private int strokeWidth = 3;
     private final int defaultscale = 10;
+    private int lastX;
+    private int transX;
 
     private Context mContext;
     private Paint mScalePaint;
@@ -35,12 +38,11 @@ public class ZoomScaleRuler extends View {
 
     private int mScaleTotalCount;//总刻度
     private int mStartScale = -10;//开始的刻度值
-    private int mInitScrollX = 0;//初始刻度值
+    private int mInitScroll = 0;//初始刻度值
     private int mWidth;//总宽度
     private int mHeight;//总高度
 
     private int mTextSize = 30;
-    private int mScaleHeight = 45;
     private int mScaleColor;//刻度以及文字的颜色
 
     private int mCurrentScale;//当前的刻度
@@ -50,8 +52,8 @@ public class ZoomScaleRuler extends View {
     private int mOffset;
     private ScrollCallback mScrollCallback;
 
-    private int lastX;
-    private int lastY;
+    private int xa;
+    private int xb;
 
 
     public ZoomScaleRuler(Context context) {
@@ -93,7 +95,6 @@ public class ZoomScaleRuler extends View {
         mScreenScaleCount = 40;
         mScaleMargin = mViewWidth / mScreenScaleCount;
         mScaleTotalCount = 40;
-        mInitScrollX = mScaleTotalCount / 2;
         mWidth = mScaleMargin * mScaleTotalCount;
         mScroller = new Scroller(mContext);
     }
@@ -103,7 +104,6 @@ public class ZoomScaleRuler extends View {
         super.onSizeChanged(w, h, oldw, oldh);
         mWidth = w;
         mHeight = h;
-        mScaleHeight = h / 5;
         mOffset = mHeight / 7;
         mTextPaint.setTextSize(mOffset);
         //对准初始刻度
@@ -169,17 +169,16 @@ public class ZoomScaleRuler extends View {
                 (double) mScaleMargin);
         //初始刻度值+滚动刻度值
         mCurrentScale = scrollScale + mScreenScaleCount / 2 + mStartScale;
-        int ss = mCurrentScale;
         if (mScrollCallback != null) {
             //超出最大值
-            if (ss > maxScale) {
-                ss = maxScale;
+            if (mCurrentScale > maxScale) {
+                mCurrentScale = maxScale;
             }
             //低于最小值
-            else if (ss < minScale) {
-                ss = minScale;
+            else if (mCurrentScale < minScale) {
+                mCurrentScale = minScale;
             }
-            float f = ((float) ss + 10) / 10;
+            float f = ((float) mCurrentScale + 10) / 10;
             mScrollCallback.setScale(f);
         }
         return mCurrentScale;
@@ -205,7 +204,7 @@ public class ZoomScaleRuler extends View {
 
     //设置初始刻度值
     public void setInitScrollX(int initScrollX) {
-        this.mInitScrollX = initScrollX;
+        this.mInitScroll = initScrollX;
         mWidth = mScaleMargin * mScaleTotalCount;
     }
 
@@ -220,45 +219,54 @@ public class ZoomScaleRuler extends View {
         mTextPaint.setColor(mScaleColor);
     }
 
+
+
+
     private RulerOnTouchListener mRulerOnTouchListener = new RulerOnTouchListener() {
 
         @Override
         public boolean onTouchEvent(MotionEvent event) {
             int x = (int) event.getX();
-            int transX;
             int offSetX = mScaleMargin * (mScreenScaleCount / 2);
-            Log.d(TAG, "offSetX:" + offSetX);
+            //Log.d(TAG, "offSetX:" + offSetX);
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
+                    lastX = (int) event.getRawX();//获取触摸事件触摸位置的原始X坐标
+                    xa = (int) event.getRawX();
                     if (mScroller != null && mScroller.isFinished()) {
                         mScroller.abortAnimation();
                     }
                     mLastScale = x;
                     break;
                 case MotionEvent.ACTION_MOVE:
+                    xb = (int) event.getRawX();
+                    int dddx = xb - xa;
+                    int ddx = (int) event.getRawX() - lastX;
                     int dx = mLastScale - x + mScrollX;
-                    changeScale();
-                    Log.d(TAG, "dx:" + dx);
-                    scrollTo(dx, 0);
+                    int scale = changeScale();
+                    // TODO: 19-8-9 滑动到最大问题 
+                    Log.d(TAG, "dx:" + dx + " ddx:" + ddx + " dddx:" + dddx + " scale:" + scale);
+                    if (scale < 0 && ddx > 0) {
+                        scrollTo(-offSetX, 0);
+                    } else if ((scale >= mScaleTotalCount - Math.abs(mStartScale)) && ddx < 0) {
+                        scrollTo(offSetX, 0);
+                    } else {
+                        scrollTo(dx, 0);
+                    }
+                    xa = (int) event.getRawX();
                     return true;
                 case MotionEvent.ACTION_UP:
                     mScrollX = getScrollX();
-                    Log.d(TAG, "mScrollX:" + mScrollX + " mWidth:" + mWidth + " offSetX:" + offSetX);
-                    if (mScrollX > mWidth - offSetX) {//超出最大值
-                        transX = getScrollX() - mWidth + offSetX;
-                        mScrollX = mWidth - offSetX;
-                        Log.i(TAG, "大于最大值");
-                    } else if (getScrollX() < -offSetX) {//小于最小值
-                        transX = getScrollX() + offSetX;
-                        mScrollX = -offSetX;
-                        Log.i(TAG, "小于最小值");
+                    if (mCurrentScale > mStartScale && mCurrentScale < 0) {
+                        scrollTo(mStartScale * mScaleMargin, 0);
+                        postInvalidate();
+                        return true;
                     } else {//在范围内
                         transX = getScrollX() % mScaleMargin;
                         if (transX > (mScaleMargin / 2)) {
                             transX = -(mScaleMargin - transX);
                         }
                         mScrollX = getScrollX() - transX;
-                        Log.i(TAG, "在范围内");
                     }
                     mScroller.startScroll(getScrollX(), 0, -transX, 0);
                     postInvalidate();

@@ -22,7 +22,6 @@
         app:scaleTotalCount="40"
         app:startScale="-10" />
 
-
     <include layout="@layout/zoom_bar" />
 
     <androidx.constraintlayout.widget.ConstraintLayout
