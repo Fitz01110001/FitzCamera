@@ -6,7 +6,6 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.util.AttributeSet;
 import android.util.Log;
-import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Scroller;
@@ -37,8 +36,9 @@ public class ZoomScaleRuler extends View {
     private int mScaleMargin;//刻度的间隔
 
     private int mScaleTotalCount;//总刻度
-    private int mStartScale = -10;//开始的刻度值
+    private final int START_SCLAE = -10;//开始的刻度值
     private int mInitScroll = 0;//初始刻度值
+    private final int DEF_SCLAE = 0;//初始刻度值
     private int mWidth;//总宽度
     private int mHeight;//总高度
 
@@ -47,13 +47,15 @@ public class ZoomScaleRuler extends View {
 
     private int mCurrentScale;//当前的刻度
     private int mScrollX;//上一次X轴滑动的距离
-    private int mLastScale;
+    private int mLastScrollX;
     private Scroller mScroller;
     private int mOffset;
     private ScrollCallback mScrollCallback;
 
     private int xa;
     private int xb;
+    private int slidDirection = 0;
+    private boolean lastStateWide = false;
 
 
     public ZoomScaleRuler(Context context) {
@@ -85,7 +87,6 @@ public class ZoomScaleRuler extends View {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
         mViewWidth = MeasureSpec.getSize(widthMeasureSpec);
         init();
-        Log.d(TAG, "onMeasure,mViewWidth:" + mViewWidth);
         int heightSize = MeasureSpec.getSize(heightMeasureSpec);
         setMeasuredDimension(mWidth, heightSize);
     }
@@ -107,7 +108,7 @@ public class ZoomScaleRuler extends View {
         mOffset = mHeight / 7;
         mTextPaint.setTextSize(mOffset);
         //对准初始刻度
-        scrollTo(mStartScale * mScaleMargin, 0);
+        scrollTo(START_SCLAE * mScaleMargin, 0);
         mScrollX = getScrollX();
     }
 
@@ -115,7 +116,7 @@ public class ZoomScaleRuler extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         drawScale(canvas);
-        changeScale();
+        updateScale();
     }
 
     private void drawScale(Canvas canvas) {
@@ -162,13 +163,13 @@ public class ZoomScaleRuler extends View {
         }
     }
 
-    private int changeScale() {
-        int minScale = mStartScale;
-        int maxScale = mStartScale + mScaleTotalCount;
+    private int updateScale() {
+        int minScale = START_SCLAE;
+        int maxScale = START_SCLAE + mScaleTotalCount;
         int scrollScale = (int) Math.rint((double) getScrollX() /
                 (double) mScaleMargin);
         //初始刻度值+滚动刻度值
-        mCurrentScale = scrollScale + mScreenScaleCount / 2 + mStartScale;
+        mCurrentScale = scrollScale + mScreenScaleCount / 2 + START_SCLAE;
         if (mScrollCallback != null) {
             //超出最大值
             if (mCurrentScale > maxScale) {
@@ -179,13 +180,18 @@ public class ZoomScaleRuler extends View {
                 mCurrentScale = minScale;
             }
             float f = ((float) mCurrentScale + 10) / 10;
-            mScrollCallback.setScale(f);
+            mScrollCallback.updateScale(f);
         }
         return mCurrentScale;
     }
 
     public interface ScrollCallback {
-        void setScale(float scale);
+        void updateScale(float scale);
+
+        void upAtWide();
+
+        void upAtDef();
+
     }
 
     public void setScrollCallback(ScrollCallback scrollCallback) {
@@ -198,9 +204,9 @@ public class ZoomScaleRuler extends View {
     }
 
     //设置第一个刻度值
-    public void setStartScale(int startScale) {
-        this.mStartScale = startScale;
-    }
+    /*public void setStartScale(int startScale) {
+        this.START_SCLAE = startScale;
+    }*/
 
     //设置初始刻度值
     public void setInitScrollX(int initScrollX) {
@@ -219,16 +225,12 @@ public class ZoomScaleRuler extends View {
         mTextPaint.setColor(mScaleColor);
     }
 
-
-
-
     private RulerOnTouchListener mRulerOnTouchListener = new RulerOnTouchListener() {
 
         @Override
         public boolean onTouchEvent(MotionEvent event) {
             int x = (int) event.getX();
             int offSetX = mScaleMargin * (mScreenScaleCount / 2);
-            //Log.d(TAG, "offSetX:" + offSetX);
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
                     lastX = (int) event.getRawX();//获取触摸事件触摸位置的原始X坐标
@@ -236,30 +238,47 @@ public class ZoomScaleRuler extends View {
                     if (mScroller != null && mScroller.isFinished()) {
                         mScroller.abortAnimation();
                     }
-                    mLastScale = x;
+                    mLastScrollX = x;
                     break;
                 case MotionEvent.ACTION_MOVE:
                     xb = (int) event.getRawX();
-                    int dddx = xb - xa;
+                    slidDirection = xb - xa;
                     int ddx = (int) event.getRawX() - lastX;
-                    int dx = mLastScale - x + mScrollX;
-                    int scale = changeScale();
-                    // TODO: 19-8-9 滑动到最大问题 
-                    Log.d(TAG, "dx:" + dx + " ddx:" + ddx + " dddx:" + dddx + " scale:" + scale);
-                    if (scale < 0 && ddx > 0) {
+                    int dx = mLastScrollX - x + mScrollX;
+                    int scale = updateScale();
+                    Log.d(TAG, "lastStateWide:" + lastStateWide + " slidDirection:" + slidDirection+" mCurrentScale:"+mCurrentScale);
+                    if ((scale <= START_SCLAE && ddx > 0)) {
+                        // Minimum range
+                        Log.d(TAG, "停在wide");
                         scrollTo(-offSetX, 0);
-                    } else if ((scale >= mScaleTotalCount - Math.abs(mStartScale)) && ddx < 0) {
+                    } else if ((scale >= mScaleTotalCount - Math.abs(START_SCLAE)) && ddx < 0) {
+                        // Maximum range
+                        Log.d(TAG, "停在max");
                         scrollTo(offSetX, 0);
+                    } else if (lastStateWide && slidDirection <=0 && mCurrentScale >= DEF_SCLAE) {
+                        // wide to 1x, should stay at 1x
+                        scrollTo(START_SCLAE * mScaleMargin, 0);
                     } else {
+                        //Log.d(TAG, "dx:" + dx + " ddx:" + ddx + " slidDirection:" + slidDirection + " scale:" + scale);
                         scrollTo(dx, 0);
                     }
                     xa = (int) event.getRawX();
                     return true;
                 case MotionEvent.ACTION_UP:
                     mScrollX = getScrollX();
-                    if (mCurrentScale > mStartScale && mCurrentScale < 0) {
-                        scrollTo(mStartScale * mScaleMargin, 0);
+                    lastStateWide = updateScale() < 0;
+                    Log.d(TAG, "ACTION_UP,lastStateWide:" + lastStateWide);
+                    if (mCurrentScale > -2 && mCurrentScale <= 0) {
+                        // wide to 1x, Stay at 1x
+                        scrollTo(START_SCLAE * mScaleMargin, 0);
                         postInvalidate();
+                        mScrollCallback.upAtDef();
+                        return true;
+                    } else if (mCurrentScale <= -2) {
+                        // 1x to wide, Stay at wide
+                        scrollTo(-offSetX, 0);
+                        postInvalidate();
+                        mScrollCallback.upAtWide();
                         return true;
                     } else {//在范围内
                         transX = getScrollX() % mScaleMargin;
@@ -282,6 +301,14 @@ public class ZoomScaleRuler extends View {
 
     public interface RulerOnTouchListener {
         boolean onTouchEvent(MotionEvent event);
+    }
+
+    public void updateRulerScale(float newScale) {
+        // mScaleMargin =13;
+        float dx = (((newScale - 1.0f) * 10) - Math.abs(START_SCLAE)) * mScaleMargin;
+        Log.d(TAG, "updateRulerScale,newScale:" + newScale + " dx:" + dx + " START_SCLAE:" + START_SCLAE);
+        scrollTo((int) dx, 0);
+        postInvalidate();
     }
 
 }
