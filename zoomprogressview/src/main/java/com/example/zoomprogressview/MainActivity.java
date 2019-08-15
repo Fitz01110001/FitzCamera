@@ -33,6 +33,9 @@ public class MainActivity extends AppCompatActivity {
 
     private Button mButton_add;
     private Button mButton_sub;
+    private Button mButton_wide;
+    private Button mButton_back;
+    private Button mButton_max;
     private float f = 1.0f;
 
 
@@ -82,8 +85,14 @@ public class MainActivity extends AppCompatActivity {
 
         mButton_add = findViewById(R.id.bt_add);
         mButton_sub = findViewById(R.id.bt_sub);
+        mButton_wide = findViewById(R.id.bt_wide);
+        mButton_back = findViewById(R.id.bt_back);
+        mButton_max = findViewById(R.id.bt_max);
         mButton_add.setOnClickListener(mOnClickListener);
         mButton_sub.setOnClickListener(mOnClickListener);
+        mButton_wide.setOnClickListener(mOnClickListener);
+        mButton_back.setOnClickListener(mOnClickListener);
+        mButton_max.setOnClickListener(mOnClickListener);
 
         mZoomScaleViewGroup = findViewById(R.id.zoomScaleGroup);
         mZoomScaleViewGroup.setZoomRulerListener(new ZoomScaleViewGroup.ZoomRulerListener() {
@@ -91,10 +100,8 @@ public class MainActivity extends AppCompatActivity {
             public void normalZoom(float scale) {
                 if (scale == zoomRulerLastScale) {
                     return;
-                } else if (zoomRulerLastScale == WIDESCALE) {
-                    // TODO: 19-8-14 switch to normal
-                    Log.d(TAG, "switch to normal,scale:" + scale);
                 } else {
+                    f = scale;
                     Log.d(TAG, "normalZoom,scale:" + scale);
                 }
                 zoomRulerLastScale = scale;
@@ -102,12 +109,12 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void switchToWide() {
-                Log.d(TAG, "switchToWide" );
+                Log.d(TAG, "switchToWide");
             }
 
             @Override
             public void switchToBack() {
-                Log.d(TAG, "switchToBack" );
+                Log.d(TAG, "switchToBack");
             }
 
 
@@ -131,15 +138,26 @@ public class MainActivity extends AppCompatActivity {
                         break;
                     }
                     f = f + 0.1f;
+                    mZoomScaleViewGroup.updateRatio(getPatternRatio());
                     break;
                 case R.id.bt_sub:
                     if (f <= 1f) {
                         break;
                     }
                     f = f - 0.1f;
+                    mZoomScaleViewGroup.updateRatio(getPatternRatio());
+                    break;
+                case R.id.bt_wide:
+                    mZoomScaleViewGroup.setZoomRuler2Wide();
+                    break;
+                case R.id.bt_back:
+                    mZoomScaleViewGroup.setZoomRuler2BackDef();
+                    break;
+                case R.id.bt_max:
+                    mZoomScaleViewGroup.setZoomRuler2BackMax();
                     break;
             }
-            mZoomScaleViewGroup.updateRatio(getPatternRatio());
+            Log.d(TAG, "click zoom :" + f);
         }
     };
 

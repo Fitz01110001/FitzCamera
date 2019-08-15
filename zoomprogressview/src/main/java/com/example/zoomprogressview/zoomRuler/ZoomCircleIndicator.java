@@ -28,6 +28,11 @@ public class ZoomCircleIndicator extends View {
     protected Canvas mCanvas;
     private boolean onZoom = false;
 
+    private final String X_1_0 = "x1.0";
+    private final String X_1 = "x1";
+    private final String X_4_0 = "x4.0";
+    private final String X_4 = "x4";
+
     public ZoomCircleIndicator(Context context) {
         this(context, null);
     }
@@ -75,7 +80,7 @@ public class ZoomCircleIndicator extends View {
     private void drawText() {
         //绘制文字
         if (text == null) {
-            text = "x1";
+            text = X_1;
         }
         Paint mTextPaint = new Paint();
         mTextPaint.setColor(textColor);
@@ -99,6 +104,10 @@ public class ZoomCircleIndicator extends View {
         //Log.d(TAG, "setText,s:" + s);
         if (s == null) {
             text = "";
+        } else if (s.equals(X_1_0)) {
+            text = X_1;
+        } else if (s.equals(X_4_0)) {
+            text = X_4;
         } else {
             text = s;
         }

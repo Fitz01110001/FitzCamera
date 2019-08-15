@@ -47,10 +47,12 @@ public class ZoomScaleViewGroup extends FrameLayout {
         }
     };
     private ZoomRulerListener zoomRulerListener;
-    private float zoomRulerLastScale = 1.0f;
-    private final int ZOOM_STATE_WIDE = 0;
-    private final int ZOOM_STATE_DEF = 1;
-    private int zoomState = 1;
+
+    private final String STRING_W_LC = "w";
+    private final String STRING_W_C = "W";
+    private final String STRING_X_LC = "x";
+    private final String STRING_X1 = "x1";
+    private final String STRING_X4 = "x4";
 
 
     public ZoomScaleViewGroup(@NonNull Context context) {
@@ -131,24 +133,16 @@ public class ZoomScaleViewGroup extends FrameLayout {
         mZoomScaleRuler.requestLayout();//重新测量
         mZoomScaleRuler.postInvalidate();//重新绘制
         mZoomScaleRuler.setScrollCallback(new ZoomScaleRuler.ScrollCallback() {
+
             @Override
-            public void updateScale(float scale) {
-                if (scale < 1f) {
-                    zoomState = 0;
-                    mZoomCircleIndicator.setText("W");
+            public void onScale(float scale) {
+                if (scale < 1.0f) {
+                    mZoomCircleIndicator.setText(STRING_W_C);
                 } else {
-                    Log.d(TAG, "normalZoom:" + scale);
-                    zoomState = 1;
-                    zoomRulerListener.normalZoom(scale);
-                    mZoomCircleIndicator.setText("x" + scale);
-                    if(scale == zoomRulerLastScale){
-                        return;
-                    }else if(scale > zoomRulerLastScale){
-                        Log.d(TAG, "zoom in:" +scale);
-                    }else if(scale < zoomRulerLastScale){
-                        Log.d(TAG, "zoom out:" +scale);
+                    if(zoomRulerListener != null){
+                        zoomRulerListener.normalZoom(scale);
                     }
-                    zoomRulerLastScale = scale;
+                    mZoomCircleIndicator.setText(STRING_X_LC + scale);
                 }
             }
 
@@ -182,16 +176,28 @@ public class ZoomScaleViewGroup extends FrameLayout {
 
     public void updateRatio(String ratio){
         Log.d(TAG, "updateRatio:" + ratio);
-        mZoomCircleIndicator.setText(ratio);
-        String[] s = ratio.split("x");
+        String[] s = ratio.split(STRING_X_LC);
         float f = Float.parseFloat(s[1]);
         if(s.length == 2){
-            Log.d(TAG, "ratio:" + f);
+            mZoomCircleIndicator.setText(ratio);
+            showZoom();
+            mZoomScaleRuler.updateRulerScale(f);
+            mHandler.postDelayed(mRunnable, DELAY_ON_UPDATE);
         }
-        showZoom();
-        // TODO: 19-8-13 滑动ruler
-        mZoomScaleRuler.updateRulerScale(f);
-        mHandler.postDelayed(mRunnable, DELAY_ON_UPDATE);
     }
 
+    public void setZoomRuler2Wide(){
+        mZoomCircleIndicator.setText(STRING_W_C);
+        mZoomScaleRuler.updateRulerScale(0);
+    }
+
+    public void setZoomRuler2BackDef(){
+        mZoomCircleIndicator.setText(STRING_X1);
+        mZoomScaleRuler.updateRulerScale(1);
+    }
+
+    public void setZoomRuler2BackMax(){
+        mZoomCircleIndicator.setText(STRING_X4);
+        mZoomScaleRuler.updateRulerScale(4);
+    }
 }

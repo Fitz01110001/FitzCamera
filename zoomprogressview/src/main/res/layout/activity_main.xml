@@ -18,21 +18,38 @@
 
         <Button
             android:id="@+id/bt_add"
-            android:layout_width="100dp"
+            android:layout_width="0dp"
             android:layout_height="100dp"
-            android:layout_marginStart="16dp"
-            android:layout_marginLeft="16dp"
-            android:text="+"
-            app:layout_constraintStart_toStartOf="parent" />
+            android:layout_weight="1"
+            android:text="+" />
 
         <Button
             android:id="@+id/bt_sub"
-            android:layout_width="100dp"
+            android:layout_width="0dp"
             android:layout_height="100dp"
-            android:layout_marginStart="16dp"
-            android:layout_marginLeft="16dp"
-            android:text="-"
-            app:layout_constraintStart_toStartOf="parent" />
+            android:layout_weight="1"
+            android:text="-"/>
+
+        <Button
+            android:id="@+id/bt_wide"
+            android:layout_width="0dp"
+            android:layout_height="100dp"
+            android:layout_weight="1"
+            android:text="WIDE" />
+
+        <Button
+            android:id="@+id/bt_back"
+            android:layout_width="0dp"
+            android:layout_height="100dp"
+            android:layout_weight="1"
+            android:text="BACK" />
+
+        <Button
+            android:id="@+id/bt_max"
+            android:layout_width="0dp"
+            android:layout_height="100dp"
+            android:layout_weight="1"
+            android:text="MAX" />
     </LinearLayout>
 
     <com.example.zoomprogressview.zoomRuler.ZoomScaleViewGroup

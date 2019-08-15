@@ -56,6 +56,7 @@ public class ZoomScaleRuler extends View {
     private int xb;
     private int slidDirection = 0;
     private boolean lastStateWide = false;
+    private int defaultScaleX = 0;
 
 
     public ZoomScaleRuler(Context context) {
@@ -108,7 +109,9 @@ public class ZoomScaleRuler extends View {
         mOffset = mHeight / 7;
         mTextPaint.setTextSize(mOffset);
         //对准初始刻度
-        scrollTo(START_SCLAE * mScaleMargin, 0);
+        defaultScaleX = START_SCLAE * mScaleMargin;
+        scrollTo(defaultScaleX, 0);
+
         mScrollX = getScrollX();
     }
 
@@ -180,13 +183,13 @@ public class ZoomScaleRuler extends View {
                 mCurrentScale = minScale;
             }
             float f = ((float) mCurrentScale + 10) / 10;
-            mScrollCallback.updateScale(f);
+            mScrollCallback.onScale(f);
         }
         return mCurrentScale;
     }
 
     public interface ScrollCallback {
-        void updateScale(float scale);
+        void onScale(float scale);
 
         void upAtWide();
 
@@ -233,6 +236,7 @@ public class ZoomScaleRuler extends View {
             int offSetX = mScaleMargin * (mScreenScaleCount / 2);
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
+                    Log.d(TAG, "ACTION_DOWN");
                     lastX = (int) event.getRawX();//获取触摸事件触摸位置的原始X坐标
                     xa = (int) event.getRawX();
                     if (mScroller != null && mScroller.isFinished()) {
@@ -241,12 +245,18 @@ public class ZoomScaleRuler extends View {
                     mLastScrollX = x;
                     break;
                 case MotionEvent.ACTION_MOVE:
+                    Log.d(TAG, "ACTION_MOVE");
                     xb = (int) event.getRawX();
                     slidDirection = xb - xa;
                     int ddx = (int) event.getRawX() - lastX;
                     int dx = mLastScrollX - x + mScrollX;
                     int scale = updateScale();
-                    Log.d(TAG, "lastStateWide:" + lastStateWide + " slidDirection:" + slidDirection+" mCurrentScale:"+mCurrentScale);
+                    Log.d(TAG, "lastStateWide:" + lastStateWide
+                            + " mCurrentScale:" + mCurrentScale
+                            + " slidDirection:" + slidDirection
+                            + " defaultScaleX:" + defaultScaleX
+                            + " dx:" + dx
+                            + " ddx:" + ddx);
                     if ((scale <= START_SCLAE && ddx > 0)) {
                         // Minimum range
                         Log.d(TAG, "停在wide");
@@ -255,30 +265,29 @@ public class ZoomScaleRuler extends View {
                         // Maximum range
                         Log.d(TAG, "停在max");
                         scrollTo(offSetX, 0);
-                    } else if (lastStateWide && slidDirection <=0 && mCurrentScale >= DEF_SCLAE) {
+                    } else if (lastStateWide && dx > defaultScaleX) {
                         // wide to 1x, should stay at 1x
-                        scrollTo(START_SCLAE * mScaleMargin, 0);
+                        Log.d(TAG, "停在1x");
+                        scrollTo(defaultScaleX, 0);
                     } else {
-                        //Log.d(TAG, "dx:" + dx + " ddx:" + ddx + " slidDirection:" + slidDirection + " scale:" + scale);
                         scrollTo(dx, 0);
                     }
                     xa = (int) event.getRawX();
                     return true;
                 case MotionEvent.ACTION_UP:
                     mScrollX = getScrollX();
-                    lastStateWide = updateScale() < 0;
-                    Log.d(TAG, "ACTION_UP,lastStateWide:" + lastStateWide);
+                    lastStateWide = mCurrentScale < 0;
                     if (mCurrentScale > -2 && mCurrentScale <= 0) {
                         // wide to 1x, Stay at 1x
-                        scrollTo(START_SCLAE * mScaleMargin, 0);
-                        postInvalidate();
+                        scrollTo(defaultScaleX, 0);
                         mScrollCallback.upAtDef();
+                        postInvalidate();
                         return true;
                     } else if (mCurrentScale <= -2) {
                         // 1x to wide, Stay at wide
                         scrollTo(-offSetX, 0);
-                        postInvalidate();
                         mScrollCallback.upAtWide();
+                        postInvalidate();
                         return true;
                     } else {//在范围内
                         transX = getScrollX() % mScaleMargin;
@@ -304,10 +313,11 @@ public class ZoomScaleRuler extends View {
     }
 
     public void updateRulerScale(float newScale) {
-        // mScaleMargin =13;
-        float dx = (((newScale - 1.0f) * 10) - Math.abs(START_SCLAE)) * mScaleMargin;
+        float diffScale = (newScale - 1.0f) * 10;
+        float dx = (diffScale - Math.abs(START_SCLAE)) * mScaleMargin;
         Log.d(TAG, "updateRulerScale,newScale:" + newScale + " dx:" + dx + " START_SCLAE:" + START_SCLAE);
         scrollTo((int) dx, 0);
+        mScrollX = getScrollX();
         postInvalidate();
     }
 
